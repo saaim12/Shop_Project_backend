@@ -1,5 +1,5 @@
 import boto3
-from apps.core.settings import (DO_SPACES_KEY, DO_SPACES_SECRET, DO_SPACES_BUCKET, DO_SPACES_REGION, DO_SPACES_ENDPOINT, DO_SPACES_BASE_URL)
+from django.conf import settings
 from uuid import uuid4
 
 
@@ -8,10 +8,10 @@ class S3Service:
     def __init__(self):
         self.client = boto3.client(
             "s3",
-            region_name=DO_SPACES_REGION,
-            endpoint_url=DO_SPACES_ENDPOINT,
-            aws_access_key_id=DO_SPACES_KEY,
-            aws_secret_access_key=DO_SPACES_SECRET,
+            region_name=settings.DO_SPACES_REGION,
+            endpoint_url=settings.DO_SPACES_ENDPOINT,
+            aws_access_key_id=settings.DO_SPACES_KEY,
+            aws_secret_access_key=settings.DO_SPACES_SECRET,
         )
 
     def upload_image(self, file, folder="users"):
@@ -24,12 +24,12 @@ class S3Service:
 
         self.client.upload_fileobj(
             file,
-            DO_SPACES_BUCKET,
+            settings.DO_SPACES_BUCKET,
             filename,
             ExtraArgs={"ACL": "public-read"}
         )
 
-        file_url = f"{DO_SPACES_BASE_URL}/{filename}"
+        file_url = f"{settings.DO_SPACES_BASE_URL}/{filename}"
 
         return file_url
 
@@ -37,10 +37,18 @@ class S3Service:
         """
         Deletes image from s3_bucket
         """
+        if not file_url or not settings.DO_SPACES_BASE_URL:
+            return
 
-        key = file_url.split(DO_SPACES_BASE_URL + "/")[1]
+        prefix = settings.DO_SPACES_BASE_URL.rstrip("/") + "/"
+        if not file_url.startswith(prefix):
+            return
+
+        key = file_url[len(prefix):]
+        if not key:
+            return
 
         self.client.delete_object(
-            Bucket=DO_SPACES_BUCKET,
+            Bucket=settings.DO_SPACES_BUCKET,
             Key=key
         )

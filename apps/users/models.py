@@ -1,9 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
+from django.conf import settings
 from django_mongodb_backend.fields import ObjectIdAutoField
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, RegexValidator
-from apps.core.settings import SECRET_KEY_FOR_ADMIN_USER
 
 
 class UserManager(BaseUserManager):
@@ -38,7 +38,7 @@ class UserManager(BaseUserManager):
 
     def create_superuser(self, email, password=None, key=None, **extra_fields):
 
-        if key != SECRET_KEY_FOR_ADMIN_USER:
+        if key != settings.SECRET_KEY_FOR_ADMIN_USER:
             raise ValueError("Invalid admin creation key")
 
         extra_fields.setdefault("user_type", "staff")

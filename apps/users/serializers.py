@@ -99,3 +99,34 @@ class UserSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         password = validated_data.pop("password")
         return User.objects.create_user(password=password, **validated_data)
+
+
+class UserUpdateSerializer(serializers.Serializer):
+    first_name = serializers.CharField(max_length=150, required=False)
+    last_name = serializers.CharField(max_length=150, required=False)
+    phone = serializers.CharField(max_length=20, required=False)
+    age = serializers.IntegerField(required=False)
+
+    def validate_age(self, value):
+        if value < 18:
+            raise serializers.ValidationError("Age must be 18 or older.")
+        return value
+
+    def validate_phone(self, value):
+        phone = (value or "").strip()
+        if not phone:
+            raise serializers.ValidationError("Phone number cannot be empty.")
+        return phone
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True)
+
+    def validate_new_password(self, value):
+        password = (value or "").strip()
+        if len(password) < 8:
+            raise serializers.ValidationError("Password must be at least 8 characters long.")
+        if password.isdigit() or password.isalpha():
+            raise serializers.ValidationError("Password must include both letters and numbers.")
+        return password

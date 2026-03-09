@@ -1,6 +1,7 @@
-from django.urls import path,include
+from django.urls import include, path
 from apps.core.views import home
-urlpatterns = [
-    path("api/v1/",include("api.v1.urls")),
 
+urlpatterns = [
+    path("", home, name="home"),
+    path("users/", include("apps.users.urls")),
 ]
