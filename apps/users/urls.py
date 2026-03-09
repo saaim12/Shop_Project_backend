@@ -4,6 +4,7 @@ from apps.users.views import (
     UserCreateView,
     UserDeleteView,
     UserGetAllView,
+    UserGetByCategoryView,
     UserInfoView,
     UserLoginView,
     UserLogoutView,
@@ -13,7 +14,6 @@ from apps.users.views import (
 
 urlpatterns = [
     path("create/", UserCreateView.as_view(), name="user-create"),
-    #only super user can do this
     path("getall/", UserGetAllView.as_view(), name="user-getall"),
     path("info/", UserInfoView.as_view(), name="user-info"),
     path("update/", UserUpdateView.as_view(), name="user-update"),
@@ -22,8 +22,5 @@ urlpatterns = [
     path("login/", UserLoginView.as_view(), name="user-login"),
     path("logout/", UserLogoutView.as_view(), name="user-logout"),
     path("delete/<str:user_id>/", UserDeleteView.as_view(), name="user-delete"),
-
-    # Backward-compatible aliases
-    path("", UserCreateView.as_view(), name="user-create-legacy"),
-    path("all/", UserGetAllView.as_view(), name="user-getall-legacy"),
+    path("by-category/<str:category>/", UserGetByCategoryView.as_view(), name="user-get-by-category-legacy"),
 ]

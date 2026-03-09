@@ -1,33 +1,47 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from corsheaders.defaults import default_headers
 
 
 load_dotenv()
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+
+def _csv_env(name, default=""):
+    raw_value = os.getenv(name, default)
+    return [item.strip() for item in raw_value.split(",") if item.strip()]
+
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 SECRET_KEY = os.getenv("SECRET_KEY", "unsafe-secret-key")
+
 DEBUG = os.getenv("DEBUG", "True") == "True"
+
 ALLOWED_HOSTS = ["*"]
 
 
-# Application definition
+# APPLICATIONS
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'rest_framework',
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+
+    "corsheaders",
+    "rest_framework",
     "drf_spectacular",
-    'apps.core',
-    'apps.users',
+
+    "apps.core",
+    "apps.users",
 ]
+
+
+# REST FRAMEWORK
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -36,81 +50,141 @@ REST_FRAMEWORK = {
     ),
 }
 
+
+# MIDDLEWARE
+
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+
+    # CORS MUST BE HIGH IN MIDDLEWARE
+    "corsheaders.middleware.CorsMiddleware",
+
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = 'config.urls'
+
+ROOT_URLCONF = "config.urls"
+
+
+# TEMPLATES
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'config.wsgi.application'
+
+WSGI_APPLICATION = "config.wsgi.application"
 
 
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+# DATABASE
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django_mongodb_backend',
-        'HOST': os.getenv("MONGO_DB_URI"),
-        'NAME': os.getenv("MONGO_DB_NAME"),
+    "default": {
+        "ENGINE": "django_mongodb_backend",
+        "HOST": os.getenv("MONGO_DB_URI"),
+        "NAME": os.getenv("MONGO_DB_NAME"),
     }
 }
 
-AUTH_USER_MODEL = 'users.User'
+
+AUTH_USER_MODEL = "users.User"
 
 
-# Password validation
-# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
+# PASSWORD VALIDATION
 
 AUTH_PASSWORD_VALIDATORS = []
 
 
-# Internationalization
-# https://docs.djangoproject.com/en/5.2/topics/i18n/
+# INTERNATIONALIZATION
 
-LANGUAGE_CODE = 'en-us'
-
-TIME_ZONE = 'UTC'
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "UTC"
 
 USE_I18N = True
-
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.2/howto/static-files/
+# STATIC FILES
 
-STATIC_URL = 'static/'
+STATIC_URL = "static/"
 
-DEFAULT_AUTO_FIELD = 'django_mongodb_backend.fields.ObjectIdAutoField'
+
+DEFAULT_AUTO_FIELD = "django_mongodb_backend.fields.ObjectIdAutoField"
+
 
 SILENCED_SYSTEM_CHECKS = [
-    'mongodb.E001',
+    "mongodb.E001",
 ]
+
+
+# CUSTOM SECRET KEYS
 
 SECRET_KEY_FOR_STAFF_USER = os.getenv("SECRET_KEY_FOR_STAFF_USER")
 SECRET_KEY_FOR_ADMIN_USER = os.getenv("SECRET_KEY_FOR_ADMIN_USER")
+
+
+# -----------------------------
+# CORS SETTINGS
+# -----------------------------
+
+CORS_ALLOWED_ORIGINS = _csv_env(
+    "CORS_ALLOWED_ORIGINS",
+    "http://127.0.0.1:5500,http://localhost:5500",
+)
+
+CORS_ALLOW_CREDENTIALS = True
+
+
+# Allow common headers
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "authorization",
+    "content-type",
+]
+
+
+# Allow common HTTP methods
+
+CORS_ALLOW_METHODS = [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE",
+    "OPTIONS",
+]
+
+
+# -----------------------------
+# CSRF SETTINGS
+# -----------------------------
+
+CSRF_TRUSTED_ORIGINS = _csv_env(
+    "CSRF_TRUSTED_ORIGINS",
+    "http://127.0.0.1:5500,http://localhost:5500",
+)
+
+
+# -----------------------------
+# DIGITAL OCEAN SPACES
+# -----------------------------
 
 DO_SPACES_KEY = os.getenv("DO_SPACES_KEY")
 DO_SPACES_SECRET = os.getenv("DO_SPACES_SECRET")

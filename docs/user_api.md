@@ -1,86 +1,89 @@
 # User API Reference
 
-Supported base URLs:
+Base URL:
 - `/users/`
 
-## Implemented Endpoints
-- `POST {base}/create/`
-- `GET {base}/getall/`
-- `GET {base}/info/`
-- `PUT {base}/update/`
-- `PUT {base}/update-photo/`
-- `POST {base}/change-password/`
-- `POST {base}/login/`
-- `POST {base}/logout/`
-- `DELETE {base}/delete/<user_id>/`
+All routes are included from `config/urls.py` via `path("users/", include("apps.users.urls"))`.
 
-Legacy aliases kept for compatibility:
-- `POST {base}/` maps to create
-- `GET {base}/all/` maps to getall
+## Endpoints
+- `POST /users/create/`
+- `GET /users/getall/`
+- `GET /users/category/<category>/`
+- `GET /users/info/`
+- `PUT /users/update/`
+- `PUT /users/update-photo/`
+- `POST /users/change-password/`
+- `POST /users/login/`
+- `POST /users/logout/`
+- `DELETE /users/delete/<user_id>/`
 
-## Auth Flow (Django Auth Session)
-1. Call `POST /users/login/` with email/password.
-2. On success, Django creates a session (`sessionid` cookie).
-3. Send that cookie with subsequent protected requests.
-4. Call `POST /users/logout/` to clear the session.
+Compatibility aliases:
+- `GET /users/all/` -> same as `GET /users/getall/`
+- `GET /users/by-category/<category>/` -> same as `GET /users/category/<category>/`
+
+## Authentication
+This project uses Django session authentication.
+
+Login flow:
+1. `POST /users/login/` with email/password.
+2. Browser stores `sessionid` cookie.
+3. Protected endpoints use that cookie automatically.
+4. `POST /users/logout/` to invalidate the session.
 
 Notes:
-- This project uses Django session auth (not JWT).
-- In browsers, cookies are managed automatically.
-- In API clients (Postman/Insomnia/curl), persist cookies between requests.
-- If you get CSRF errors on authenticated `POST/PUT/DELETE` with session cookie, test protected endpoints using Basic Auth (`email` + `password`) in Postman.
+- In browser-based frontend calls, use `credentials: "include"`.
+- For unsafe methods (`POST`, `PUT`, `DELETE`) with session auth, include CSRF token.
+- Unauthorized/forbidden errors produced by DRF permissions still use `{"detail": "..."}`.
 
-## Quick Start: Test Every API (Postman/cURL)
-Use `/users/` for all examples below.
+## Standard Error Shape (View-Level)
+User view validation/business errors are returned as:
 
-1. Create a user with `POST /create/`.
-2. Login with `POST /login/` and store cookies (`sessionid`).
-3. Call `GET /info/`.
-4. Call `PUT /update/`.
-5. Call `PUT /update-photo/`.
-6. Call `POST /change-password/` (logs you out).
-7. Login again with new password.
-8. Call `GET /getall/` using superuser account.
-9. Call `DELETE /delete/<user_id>/` (soft delete).
-10. Call `DELETE /delete/<user_id>/?hard=true` as superuser.
+```json
+{
+  "success": false,
+  "message": "Validation failed",
+  "field_errors": {
+    "email": [
+      "A user with this email already exists."
+    ]
+  }
+}
+```
 
-## General Validation Rules
-- Send JSON with `Content-Type: application/json`.
-- Use `multipart/form-data` only when uploading an `image` file.
-- Email must be unique.
-- Password must be at least 8 characters with letters and numbers.
-- Age must be at least 18.
-- Phone must contain 7-15 digits and may start with `+`.
-- `user_type` values: `customer` or `staff`.
+Possible keys:
+- `success`: always `false` on these errors.
+- `message`: high-level message.
+- `field_errors`: optional field-level details.
 
-## S3/Spaces Image Handling
-- During `create` and `update`, image files are uploaded to S3/Spaces and saved as `image` URL.
-- On image replace (update), old image is deleted from S3/Spaces.
-- On hard delete, user image is deleted from S3/Spaces.
-- On soft delete, account is deactivated (`is_active=false`) and image is kept.
-
-## Secrets for Privileged Creation
-- `SECRET_KEY_FOR_STAFF_USER`
-- `SECRET_KEY_FOR_ADMIN_USER`
+## Global Rules
+- `user_type`: `customer` or `staff`.
+- `age`: must be `>= 18`.
+- `phone`: must match `^\+?[0-9]{7,15}$`.
+- Password must be at least 8 characters and contain both letters and numbers.
+- Staff creation requires `key=SECRET_KEY_FOR_STAFF_USER`.
+- Superuser creation requires `is_superuser=true` and `key=SECRET_KEY_FOR_ADMIN_USER`.
 
 ## 1) Create User
 `POST /users/create/`
 
-### Body Fields
-| Field | Type | Required | Notes |
-| ----- | ---- | -------- | ----- |
-| `first_name` | string | Yes | Max 150 chars |
-| `last_name` | string | Yes | Max 150 chars |
-| `email` | string | Yes | Must be unique |
-| `password` | string | Yes | Minimum 8 chars |
-| `phone` | string | Yes | 7-15 digits, may start with `+` |
-| `age` | integer | Yes | Minimum 18 |
-| `user_type` | string | Optional | `customer` (default) or `staff` |
-| `image` | file | Optional | Use multipart upload |
-| `key` | string | Conditional | Required for `staff` and `is_superuser=true` |
-| `is_superuser` | boolean | Conditional | True only for superuser creation |
+Content types:
+- `application/json`
+- `multipart/form-data` (if uploading `image`)
 
-### Example
+Body fields:
+- `first_name` (required)
+- `last_name` (required)
+- `email` (required, unique)
+- `password` (required)
+- `phone` (required)
+- `age` (required)
+- `user_type` (optional, default `customer`)
+- `image` (optional file)
+- `key` (required for staff/superuser creation)
+- `is_superuser` (optional bool)
+
+Example request:
+
 ```json
 {
   "first_name": "Cara",
@@ -93,57 +96,27 @@ Use `/users/` for all examples below.
 }
 ```
 
-### Staff Create Example
-```json
-{
-  "first_name": "Ben",
-  "last_name": "Service",
-  "email": "ben.staff@example.com",
-  "password": "StrongPass456",
-  "phone": "+15550101",
-  "age": 32,
-  "user_type": "staff",
-  "key": "<SECRET_KEY_FOR_STAFF_USER>"
-}
-```
+Success (201): returns full user object.
 
-### Superuser Create Example
-```json
-{
-  "first_name": "Alice",
-  "last_name": "Root",
-  "email": "alice.root@example.com",
-  "password": "UltraSecure789",
-  "phone": "+15550303",
-  "age": 35,
-  "is_superuser": true,
-  "key": "<SECRET_KEY_FOR_ADMIN_USER>"
-}
-```
+Example error (400):
 
-### Success Response (201)
 ```json
 {
-  "id": "67c9d7b5f6a2c14d8c7f0a01",
-  "first_name": "Cara",
-  "last_name": "Driver",
-  "email": "cara.customer@example.com",
-  "phone": "+15550202",
-  "user_type": "customer",
-  "age": 28,
-  "image": null,
-  "is_active": true,
-  "is_staff": false,
-  "is_superuser": false,
-  "created_at": "2026-03-09T12:10:00Z",
-  "updated_at": "2026-03-09T12:10:00Z"
+  "success": false,
+  "message": "Validation failed",
+  "field_errors": {
+    "email": [
+      "A user with this email already exists."
+    ]
+  }
 }
 ```
 
 ## 2) Login
 `POST /users/login/`
 
-### Request
+Request:
+
 ```json
 {
   "email": "cara.customer@example.com",
@@ -151,144 +124,127 @@ Use `/users/` for all examples below.
 }
 ```
 
-### Success Response (200)
+Success (200):
+
 ```json
 {
   "message": "Login successful",
-  "photo": "https://cdn.example.com/users/cara.jpg",
+  "photo": null,
   "user": {
-    "id": "67c9d7b5f6a2c14d8c7f0a01",
-    "first_name": "Cara",
-    "last_name": "Driver",
-    "email": "cara.customer@example.com",
-    "phone": "+15550202",
-    "user_type": "customer",
-    "age": 28,
-    "image": null,
-    "is_active": true,
-    "is_staff": false,
-    "is_superuser": false,
-    "created_at": "2026-03-09T12:10:00Z",
-    "updated_at": "2026-03-09T12:10:00Z"
+    "id": "...",
+    "email": "cara.customer@example.com"
   }
 }
 ```
 
-### Error Response (401)
+Validation error (400):
+
 ```json
 {
-  "error": "Invalid credentials"
+  "success": false,
+  "message": "Validation failed",
+  "field_errors": {
+    "email": [
+      "Email is required"
+    ]
+  }
 }
 ```
 
-### Login cURL Example
-```bash
-curl -X POST http://localhost:8000/users/login/ \
-  -H "Content-Type: application/json" \
-  -c cookies.txt \
-  -d '{"email":"cara.customer@example.com","password":"CustomerPass123"}'
+Credential error (401):
+
+```json
+{
+  "success": false,
+  "message": "Invalid credentials"
+}
 ```
 
 ## 3) Logout
 `POST /users/logout/`
 
-### Request
-```json
-{}
-```
+Requires authenticated session.
 
-### Logout cURL Example
-```bash
-curl -X POST http://localhost:8000/users/logout/ \
-  -H "Content-Type: application/json" \
-  -b cookies.txt \
-  -d '{}'
-```
+Success (200):
 
-### Success Response (200)
 ```json
 {
   "message": "Logout successful"
 }
 ```
 
-## 4) Get Logged-In User Info
+## 4) Logged-In User Info
 `GET /users/info/`
 
-Required auth:
-- Must be logged in (valid Django session cookie)
+Requires authenticated session.
 
-### Success Response (200)
+Success (200):
+
 ```json
 {
-  "photo": "https://cdn.example.com/users/cara.jpg",
+  "photo": "https://...",
   "user": {
-    "id": "67c9d7b5f6a2c14d8c7f0a01",
-    "first_name": "Cara",
-    "last_name": "Driver",
-    "email": "cara.customer@example.com",
-    "phone": "+15550202",
-    "user_type": "customer",
-    "age": 28,
-    "image": "https://cdn.example.com/users/cara.jpg",
-    "is_active": true,
-    "is_staff": false,
-    "is_superuser": false,
-    "created_at": "2026-03-09T12:10:00Z",
-    "updated_at": "2026-03-09T12:10:00Z"
+    "id": "...",
+    "email": "..."
   }
 }
 ```
 
-## 5) Update Logged-In User Profile
+## 5) Update Profile
 `PUT /users/update/`
 
-Required auth:
-- Must be logged in (valid Django session cookie)
+Requires authenticated session.
 
 Accepted fields:
-- `first_name`, `last_name`, `phone`, `age`
-- Optional image file using `multipart/form-data` field name `image`
+- `first_name`
+- `last_name`
+- `phone`
+- `age`
 
-### Request Example (JSON)
-```json
-{
-  "first_name": "Cara Updated",
-  "phone": "+15550999",
-  "age": 29
-}
-```
+Success (200):
 
-### Success Response (200)
 ```json
 {
   "message": "Profile updated successfully",
-  "photo": "https://cdn.example.com/users/cara-new.jpg",
+  "photo": "https://...",
   "user": {
-    "id": "67c9d7b5f6a2c14d8c7f0a01",
-    "first_name": "Cara Updated",
-    "last_name": "Driver",
-    "email": "cara.customer@example.com",
-    "phone": "+15550999",
-    "user_type": "customer",
-    "age": 29,
-    "image": "https://cdn.example.com/users/cara-new.jpg",
-    "is_active": true,
-    "is_staff": false,
-    "is_superuser": false,
-    "created_at": "2026-03-09T12:10:00Z",
-    "updated_at": "2026-03-09T12:20:00Z"
+    "id": "..."
   }
 }
 ```
 
-## 6) Change Password
+Validation error (400): standardized error shape.
+
+## 6) Update Photo
+`PUT /users/update-photo/`
+
+Requires authenticated session.
+
+Request type:
+- `multipart/form-data`
+- required file field: `image`
+
+Missing image (400):
+
+```json
+{
+  "success": false,
+  "message": "Validation failed",
+  "field_errors": {
+    "image": [
+      "Image file is required"
+    ]
+  }
+}
+```
+
+## 7) Change Password
 `POST /users/change-password/`
 
-Required auth:
-- Must be logged in (valid Django session cookie)
+Requires authenticated session.
 
-### Request
+Request:
+
 ```json
 {
   "old_password": "CustomerPass123",
@@ -296,108 +252,30 @@ Required auth:
 }
 ```
 
-### Success Response (200)
+Success (200):
+
 ```json
 {
   "message": "Password changed successfully. Please login again."
 }
 ```
 
-After success, current session is logged out for security.
-
-## 7) Update Logged-In User Photo
-`PUT /users/update-photo/`
-
-Required auth:
-- Must be logged in (valid Django session cookie)
-
-Request type:
-- `multipart/form-data`
-- Required file field: `image`
-
-### Request Example (JSON-like)
-```json
-{
-  "image": "<binary_file_multipart>"
-}
-```
-
-### cURL Example
-```bash
-curl -X PUT http://localhost:8000/users/update-photo/ \
-  -b cookies.txt \
-  -F "image=@C:/path/to/photo.jpg"
-```
-
-### Success Response (200)
-```json
-{
-  "message": "Photo updated successfully",
-  "photo": "https://cdn.example.com/users/cara-new.jpg",
-  "user": {
-    "id": "67c9d7b5f6a2c14d8c7f0a01",
-    "first_name": "Cara",
-    "last_name": "Driver",
-    "email": "cara.customer@example.com",
-    "phone": "+15550202",
-    "user_type": "customer",
-    "age": 28,
-    "image": "https://cdn.example.com/users/cara-new.jpg",
-    "is_active": true,
-    "is_staff": false,
-    "is_superuser": false,
-    "created_at": "2026-03-09T12:10:00Z",
-    "updated_at": "2026-03-09T12:25:00Z"
-  }
-}
-```
-
-### Error Response (400)
-```json
-{
-  "error": "image file is required"
-}
-```
+After success, user is logged out.
 
 ## 8) Get All Users (Superuser Only)
 `GET /users/getall/`
 
-Required auth:
-- Must be logged in (valid Django session cookie)
+Requires authenticated superuser.
 
-Only authenticated superusers can access this endpoint.
-
-Supported query parameters:
-- `email` (partial match)
+Query params:
+- `email` (contains)
 - `user_type` (`customer` or `staff`)
-- `is_active` (`true` or `false`)
-- `page` (default pagination)
-- `page_size` (max 100)
+- `is_active` (`true|false|1|0|yes|no`)
+- `page`
+- `page_size`
 
-### Request Example (JSON-style query object)
-```json
-{
-  "email": "cara",
-  "user_type": "customer",
-  "is_active": true,
-  "page": 1,
-  "page_size": 20
-}
-```
+Success (200): paginated response:
 
-### Request Body
-```json
-// no request body
-```
-
-### Unauthorized Response (403)
-```json
-{
-  "detail": "You do not have permission to perform this action."
-}
-```
-
-### Success Response (200)
 ```json
 {
   "count": 1,
@@ -405,98 +283,91 @@ Supported query parameters:
   "previous": null,
   "results": [
     {
-      "id": "67c9d7b5f6a2c14d8c7f0a01",
-      "first_name": "Cara",
-      "last_name": "Driver",
-      "email": "cara.customer@example.com",
-      "phone": "+15550202",
-      "user_type": "customer",
-      "age": 28,
-      "image": "https://cdn.example.com/users/cara.jpg",
-      "is_active": true,
-      "is_staff": false,
-      "is_superuser": false,
-      "created_at": "2026-03-09T12:10:00Z",
-      "updated_at": "2026-03-09T12:10:00Z"
+      "id": "...",
+      "email": "..."
     }
   ]
 }
 ```
 
-### GetAll cURL Example
-```bash
-curl -X GET "http://localhost:8000/users/getall/?user_type=customer&page=1&page_size=20" \
-  -b cookies.txt
+Validation error example (400):
+
+```json
+{
+  "success": false,
+  "message": "Validation failed",
+  "field_errors": {
+    "user_type": [
+      "Use 'customer' or 'staff'"
+    ]
+  }
+}
 ```
 
-## 9) Delete User
+## 9) Get Users By Category (Superuser Only)
+`GET /users/category/<category>/`
+
+Alias:
+- `GET /users/by-category/<category>/`
+
+Valid categories:
+- `customers`
+- `customer`
+- `staff`
+
+Invalid category (400):
+
+```json
+{
+  "success": false,
+  "message": "Validation failed",
+  "field_errors": {
+    "category": [
+      "Use 'customers' or 'staff'"
+    ]
+  }
+}
+```
+
+## 10) Delete User
 `DELETE /users/delete/<user_id>/`
 
-Required auth:
-- Must be logged in (valid Django session cookie)
-- Superuser can delete any user
-- Normal user can only delete own account
+Requires authenticated user.
 
-Default behavior:
-- Soft delete (deactivate): `is_active` set to `false`
+Permissions:
+- Superuser can delete any account.
+- Normal user can delete only own account.
 
-Hard delete behavior:
-- Superuser only, use `?hard=true`
-- User record is removed and image is deleted from S3/Spaces
+Behavior:
+- Default: soft delete (`is_active=false`).
+- Hard delete: `?hard=true` and requester must be superuser.
 
-### Request Example (Soft Delete)
-```json
-{
-  "user_id": "67c9d7b5f6a2c14d8c7f0a01",
-  "hard": false
-}
-```
+Success (soft delete, 200):
 
-### Request Example (Hard Delete)
-```json
-{
-  "user_id": "67c9d7b5f6a2c14d8c7f0a01",
-  "hard": true
-}
-```
-
-### Request Body
-```json
-// no request body
-```
-
-### Success Response (200)
 ```json
 {
   "message": "User deactivated successfully"
 }
 ```
 
-### Hard Delete Success Response (200)
+Success (hard delete, 200):
+
 ```json
 {
   "message": "User hard-deleted successfully"
 }
 ```
 
-### Error Response (403)
-```json
-{
-  "detail": "You do not have permission to perform this action."
-}
-```
-
-## Quick Test Checklist
-1. Create customer with `POST /users/create/`.
-2. Login with `POST /users/login/` and keep session cookie.
-3. Call `GET /users/info/` and verify profile + photo.
-4. Call `PUT /users/update/` with image and verify old image is replaced in S3.
-5. Call `PUT /users/update-photo/` and verify photo changes in response.
-6. Call `POST /users/change-password/` and verify forced re-login.
-7. Call `GET /users/getall/` as non-superuser and expect 403.
-8. Login as superuser and call `GET /users/getall/?is_active=true` and expect paginated 200.
-9. Call `DELETE /users/delete/<user_id>/` (soft delete), verify `is_active=false`.
-10. Call `DELETE /users/delete/<user_id>/?hard=true` as superuser, verify DB + S3 delete.
-11. Logout with `POST /users/logout/` and verify session is cleared.
+## Quick Test Flow
+1. `POST /users/create/` create a customer.
+2. `POST /users/login/`.
+3. `GET /users/info/`.
+4. `PUT /users/update/`.
+5. `PUT /users/update-photo/`.
+6. `POST /users/change-password/` (forces logout).
+7. `POST /users/login/` with new password.
+8. As superuser: `GET /users/getall/`.
+9. As superuser: `GET /users/category/customers/`.
+10. `DELETE /users/delete/<user_id>/`.
 
 

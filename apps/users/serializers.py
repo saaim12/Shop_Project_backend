@@ -108,8 +108,8 @@ class UserUpdateSerializer(serializers.Serializer):
     age = serializers.IntegerField(required=False)
 
     def validate_age(self, value):
-        if value < 18:
-            raise serializers.ValidationError("Age must be 18 or older.")
+        if value < 18 and value is not None and value > 60:
+            raise serializers.ValidationError("Age must be between 18 and 60.")
         return value
 
     def validate_phone(self, value):

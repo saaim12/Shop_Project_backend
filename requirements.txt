@@ -11,3 +11,4 @@ tzdata==2025.3
 boto3==1.28.57
 Pillow==10.3.0
 drf-spectacular
+django-cors-headers==4.7.0
