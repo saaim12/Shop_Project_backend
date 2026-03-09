@@ -26,6 +26,16 @@ def _error_response(message, status_code, field_errors=None):
     return Response(payload, status=status_code)
 
 
+def _success_response(message, status_code=status.HTTP_200_OK, data=None):
+    payload = {
+        "success": True,
+        "message": message,
+    }
+    if data is not None:
+        payload["data"] = data
+    return Response(payload, status=status_code)
+
+
 class UserCreateView(APIView):
     permission_classes = [AllowAny]
 
@@ -74,7 +84,11 @@ class UserCreateView(APIView):
                     getattr(exc, "message_dict", {"non_field_errors": exc.messages}),
                 )
 
-            return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+            return _success_response(
+                "User created successfully",
+                status.HTTP_201_CREATED,
+                UserSerializer(user).data,
+            )
 
         if user_type == "staff" and key != settings.SECRET_KEY_FOR_STAFF_USER:
             return _error_response(
@@ -98,7 +112,11 @@ class UserCreateView(APIView):
                     status.HTTP_400_BAD_REQUEST,
                     getattr(exc, "message_dict", {"non_field_errors": exc.messages}),
                 )
-            return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+            return _success_response(
+                "User created successfully",
+                status.HTTP_201_CREATED,
+                UserSerializer(user).data,
+            )
 
         return _error_response(
             "Validation failed",
@@ -145,7 +163,8 @@ class UserGetAllView(APIView):
         paginator = CustomPagination()
         paginated_users = paginator.paginate_queryset(users, request)
         serializer = UserSerializer(paginated_users, many=True)
-        return paginator.get_paginated_response(serializer.data)
+        paginated_response = paginator.get_paginated_response(serializer.data)
+        return _success_response("Users fetched successfully", data=paginated_response.data)
 
 
 class UserGetByCategoryView(APIView):
@@ -172,7 +191,8 @@ class UserGetByCategoryView(APIView):
         paginator = CustomPagination()
         paginated_users = paginator.paginate_queryset(users, request)
         serializer = UserSerializer(paginated_users, many=True)
-        return paginator.get_paginated_response(serializer.data)
+        paginated_response = paginator.get_paginated_response(serializer.data)
+        return _success_response("Users fetched successfully", data=paginated_response.data)
 
 
 class UserLoginView(APIView):
@@ -205,13 +225,12 @@ class UserLoginView(APIView):
 
         user_data = UserSerializer(user).data
 
-        return Response(
-            {
-                "message": "Login successful",
+        return _success_response(
+            "Login successful",
+            data={
                 "photo": user_data.get("image"),
                 "user": user_data,
             },
-            status=status.HTTP_200_OK,
         )
 
 
@@ -220,7 +239,7 @@ class UserLogoutView(APIView):
 
     def post(self, request):
         logout(request)
-        return Response({"message": "Logout successful"}, status=status.HTTP_200_OK)
+        return _success_response("Logout successful")
 
 
 class UserInfoView(APIView):
@@ -233,12 +252,12 @@ class UserInfoView(APIView):
             return _error_response(str(exc), status.HTTP_404_NOT_FOUND)
 
         user_data = UserSerializer(user).data
-        return Response(
-            {
+        return _success_response(
+            "User info fetched successfully",
+            data={
                 "photo": user_data.get("image"),
                 "user": user_data,
             },
-            status=status.HTTP_200_OK,
         )
 
 
@@ -266,7 +285,7 @@ class UserDeleteView(APIView):
             logout(request)
 
         message = "User hard-deleted successfully" if hard_delete else "User deactivated successfully"
-        return Response({"message": message}, status=status.HTTP_200_OK)
+        return _success_response(message)
 
 
 class UserUpdateView(APIView):
@@ -297,13 +316,12 @@ class UserUpdateView(APIView):
             return _error_response(str(exc), status.HTTP_400_BAD_REQUEST)
 
         user_data = UserSerializer(user).data
-        return Response(
-            {
-                "message": "Profile updated successfully",
+        return _success_response(
+            "Profile updated successfully",
+            data={
                 "photo": user_data.get("image"),
                 "user": user_data,
             },
-            status=status.HTTP_200_OK,
         )
 
 
@@ -333,13 +351,12 @@ class UserUpdatePhotoView(APIView):
             return _error_response(str(exc), status.HTTP_400_BAD_REQUEST)
 
         user_data = UserSerializer(user).data
-        return Response(
-            {
-                "message": "Photo updated successfully",
+        return _success_response(
+            "Photo updated successfully",
+            data={
                 "photo": user_data.get("image"),
                 "user": user_data,
             },
-            status=status.HTTP_200_OK,
         )
 
 
@@ -365,10 +382,7 @@ class ChangePasswordView(APIView):
 
         # Keep sessions secure after password change.
         logout(request)
-        return Response(
-            {"message": "Password changed successfully. Please login again."},
-            status=status.HTTP_200_OK,
-        )
+        return _success_response("Password changed successfully. Please login again.")
 
 
 __all__ = [

@@ -3,40 +3,22 @@
 Base URL:
 - `/users/`
 
-All routes are included from `config/urls.py` via `path("users/", include("apps.users.urls"))`.
+All routes are included in `config/urls.py` via:
+- `path("users/", include("apps.users.urls"))`
 
-## Endpoints
-- `POST /users/create/`
-- `GET /users/getall/`
-- `GET /users/category/<category>/`
-- `GET /users/info/`
-- `PUT /users/update/`
-- `PUT /users/update-photo/`
-- `POST /users/change-password/`
-- `POST /users/login/`
-- `POST /users/logout/`
-- `DELETE /users/delete/<user_id>/`
+## Response Contract
 
-Compatibility aliases:
-- `GET /users/all/` -> same as `GET /users/getall/`
-- `GET /users/by-category/<category>/` -> same as `GET /users/category/<category>/`
+Success shape:
 
-## Authentication
-This project uses Django session authentication.
+```json
+{
+  "success": true,
+  "message": "Operation successful",
+  "data": {}
+}
+```
 
-Login flow:
-1. `POST /users/login/` with email/password.
-2. Browser stores `sessionid` cookie.
-3. Protected endpoints use that cookie automatically.
-4. `POST /users/logout/` to invalidate the session.
-
-Notes:
-- In browser-based frontend calls, use `credentials: "include"`.
-- For unsafe methods (`POST`, `PUT`, `DELETE`) with session auth, include CSRF token.
-- Unauthorized/forbidden errors produced by DRF permissions still use `{"detail": "..."}`.
-
-## Standard Error Shape (View-Level)
-User view validation/business errors are returned as:
+Error shape:
 
 ```json
 {
@@ -44,31 +26,67 @@ User view validation/business errors are returned as:
   "message": "Validation failed",
   "field_errors": {
     "email": [
-      "A user with this email already exists."
+      "Email is required"
     ]
   }
 }
 ```
 
-Possible keys:
-- `success`: always `false` on these errors.
-- `message`: high-level message.
-- `field_errors`: optional field-level details.
+Notes:
+- `data` may be omitted for operations like logout/delete.
+- `field_errors` appears for validation-style errors.
+- DRF auth/permission errors are also normalized to this shape via custom exception handler.
 
-## Global Rules
+## Route Support
+
+Both styles are supported for all endpoints:
+- with trailing slash: `/users/login/`
+- without trailing slash: `/users/login`
+
+## Endpoints
+- `POST /users/create`
+- `POST /users/login`
+- `POST /users/logout`
+- `GET /users/info`
+- `PUT /users/update`
+- `PUT /users/update-photo`
+- `POST /users/change-password`
+- `GET /users/getall`
+- `GET /users/category/<category>`
+- `DELETE /users/delete/<user_id>`
+
+Compatibility aliases:
+- `GET /users/all`
+- `GET /users/by-category/<category>`
+
+## Authentication
+
+This project uses Django session auth.
+
+Login flow:
+1. Call `POST /users/login`.
+2. Save cookie jar (`sessionid`, and CSRF if needed).
+3. Use cookie jar for protected endpoints.
+4. Call `POST /users/logout`.
+
+Postman tips:
+- Use a cookie jar (Postman handles this automatically).
+- For unsafe methods with session auth, send `X-CSRFToken` when CSRF is enforced.
+
+## Global Validation Rules
 - `user_type`: `customer` or `staff`.
-- `age`: must be `>= 18`.
-- `phone`: must match `^\+?[0-9]{7,15}$`.
-- Password must be at least 8 characters and contain both letters and numbers.
+- `age`: at least `18`.
+- `phone`: `^\+?[0-9]{7,15}$`.
+- Password: minimum 8 chars, must include letters and numbers.
 - Staff creation requires `key=SECRET_KEY_FOR_STAFF_USER`.
 - Superuser creation requires `is_superuser=true` and `key=SECRET_KEY_FOR_ADMIN_USER`.
 
 ## 1) Create User
-`POST /users/create/`
+`POST /users/create`
 
-Content types:
+Accepted content types:
 - `application/json`
-- `multipart/form-data` (if uploading `image`)
+- `multipart/form-data` (for `image`)
 
 Body fields:
 - `first_name` (required)
@@ -79,7 +97,7 @@ Body fields:
 - `age` (required)
 - `user_type` (optional, default `customer`)
 - `image` (optional file)
-- `key` (required for staff/superuser creation)
+- `key` (required for `staff` and superuser creation)
 - `is_superuser` (optional bool)
 
 Example request:
@@ -96,24 +114,22 @@ Example request:
 }
 ```
 
-Success (201): returns full user object.
-
-Example error (400):
+Success (201):
 
 ```json
 {
-  "success": false,
-  "message": "Validation failed",
-  "field_errors": {
-    "email": [
-      "A user with this email already exists."
-    ]
+  "success": true,
+  "message": "User created successfully",
+  "data": {
+    "id": "...",
+    "email": "cara.customer@example.com",
+    "user_type": "customer"
   }
 }
 ```
 
 ## 2) Login
-`POST /users/login/`
+`POST /users/login`
 
 Request:
 
@@ -128,25 +144,14 @@ Success (200):
 
 ```json
 {
+  "success": true,
   "message": "Login successful",
-  "photo": null,
-  "user": {
-    "id": "...",
-    "email": "cara.customer@example.com"
-  }
-}
-```
-
-Validation error (400):
-
-```json
-{
-  "success": false,
-  "message": "Validation failed",
-  "field_errors": {
-    "email": [
-      "Email is required"
-    ]
+  "data": {
+    "photo": null,
+    "user": {
+      "id": "...",
+      "email": "cara.customer@example.com"
+    }
   }
 }
 ```
@@ -161,7 +166,7 @@ Credential error (401):
 ```
 
 ## 3) Logout
-`POST /users/logout/`
+`POST /users/logout`
 
 Requires authenticated session.
 
@@ -169,12 +174,13 @@ Success (200):
 
 ```json
 {
+  "success": true,
   "message": "Logout successful"
 }
 ```
 
 ## 4) Logged-In User Info
-`GET /users/info/`
+`GET /users/info`
 
 Requires authenticated session.
 
@@ -182,16 +188,20 @@ Success (200):
 
 ```json
 {
-  "photo": "https://...",
-  "user": {
-    "id": "...",
-    "email": "..."
+  "success": true,
+  "message": "User info fetched successfully",
+  "data": {
+    "photo": "https://...",
+    "user": {
+      "id": "...",
+      "email": "..."
+    }
   }
 }
 ```
 
 ## 5) Update Profile
-`PUT /users/update/`
+`PUT /users/update`
 
 Requires authenticated session.
 
@@ -205,18 +215,19 @@ Success (200):
 
 ```json
 {
+  "success": true,
   "message": "Profile updated successfully",
-  "photo": "https://...",
-  "user": {
-    "id": "..."
+  "data": {
+    "photo": "https://...",
+    "user": {
+      "id": "..."
+    }
   }
 }
 ```
 
-Validation error (400): standardized error shape.
-
 ## 6) Update Photo
-`PUT /users/update-photo/`
+`PUT /users/update-photo`
 
 Requires authenticated session.
 
@@ -224,7 +235,7 @@ Request type:
 - `multipart/form-data`
 - required file field: `image`
 
-Missing image (400):
+Example error (400):
 
 ```json
 {
@@ -239,7 +250,7 @@ Missing image (400):
 ```
 
 ## 7) Change Password
-`POST /users/change-password/`
+`POST /users/change-password`
 
 Requires authenticated session.
 
@@ -256,6 +267,7 @@ Success (200):
 
 ```json
 {
+  "success": true,
   "message": "Password changed successfully. Please login again."
 }
 ```
@@ -263,7 +275,7 @@ Success (200):
 After success, user is logged out.
 
 ## 8) Get All Users (Superuser Only)
-`GET /users/getall/`
+`GET /users/getall`
 
 Requires authenticated superuser.
 
@@ -274,63 +286,42 @@ Query params:
 - `page`
 - `page_size`
 
-Success (200): paginated response:
+Success (200):
 
 ```json
 {
-  "count": 1,
-  "next": null,
-  "previous": null,
-  "results": [
-    {
-      "id": "...",
-      "email": "..."
-    }
-  ]
-}
-```
-
-Validation error example (400):
-
-```json
-{
-  "success": false,
-  "message": "Validation failed",
-  "field_errors": {
-    "user_type": [
-      "Use 'customer' or 'staff'"
+  "success": true,
+  "message": "Users fetched successfully",
+  "data": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": "...",
+        "email": "..."
+      }
     ]
   }
 }
 ```
 
 ## 9) Get Users By Category (Superuser Only)
-`GET /users/category/<category>/`
+`GET /users/category/<category>`
 
 Alias:
-- `GET /users/by-category/<category>/`
+- `GET /users/by-category/<category>`
 
-Valid categories:
+Valid values:
 - `customers`
 - `customer`
 - `staff`
 
-Invalid category (400):
-
-```json
-{
-  "success": false,
-  "message": "Validation failed",
-  "field_errors": {
-    "category": [
-      "Use 'customers' or 'staff'"
-    ]
-  }
-}
-```
+Success (200):
+- same response envelope as `getall` (`success/message/data` with paginated payload).
 
 ## 10) Delete User
-`DELETE /users/delete/<user_id>/`
+`DELETE /users/delete/<user_id>`
 
 Requires authenticated user.
 
@@ -339,35 +330,37 @@ Permissions:
 - Normal user can delete only own account.
 
 Behavior:
-- Default: soft delete (`is_active=false`).
-- Hard delete: `?hard=true` and requester must be superuser.
+- default: soft delete (`is_active=false`)
+- hard delete: `?hard=true` (superuser only)
 
-Success (soft delete, 200):
+Success (200):
 
 ```json
 {
+  "success": true,
   "message": "User deactivated successfully"
 }
 ```
 
-Success (hard delete, 200):
+Hard delete success (200):
 
 ```json
 {
+  "success": true,
   "message": "User hard-deleted successfully"
 }
 ```
 
-## Quick Test Flow
-1. `POST /users/create/` create a customer.
-2. `POST /users/login/`.
-3. `GET /users/info/`.
-4. `PUT /users/update/`.
-5. `PUT /users/update-photo/`.
-6. `POST /users/change-password/` (forces logout).
-7. `POST /users/login/` with new password.
-8. As superuser: `GET /users/getall/`.
-9. As superuser: `GET /users/category/customers/`.
-10. `DELETE /users/delete/<user_id>/`.
+## Postman Quick Flow
+1. `POST /users/create`
+2. `POST /users/login`
+3. `GET /users/info`
+4. `PUT /users/update`
+5. `PUT /users/update-photo`
+6. `POST /users/change-password` (logs out)
+7. `POST /users/login` (new password)
+8. As superuser: `GET /users/getall`
+9. As superuser: `GET /users/category/customers`
+10. `DELETE /users/delete/<user_id>`
 
 
