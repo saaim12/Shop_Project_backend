@@ -1,5 +1,4 @@
 from django.apps import AppConfig
-from django.db import connections
 
 
 class CoreConfig(AppConfig):
@@ -7,10 +6,6 @@ class CoreConfig(AppConfig):
     name = "apps.core"
 
     def ready(self):
-        try:
-            conn = connections["default"]
-            with conn.cursor() as cursor:
-                pass
-            print("MongoDB connection successful. ready to store data")
-        except Exception as e:
-            print(f"MongoDB connection failed: {e}")
+        from config.mongo import connect_mongo
+
+        connect_mongo()

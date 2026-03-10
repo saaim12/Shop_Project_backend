@@ -1,132 +1,81 @@
+from bson import ObjectId
 from rest_framework import serializers
-from .models import User
+
+from apps.users.models import User
 
 
-class UserSerializer(serializers.ModelSerializer):
+class UserSerializer(serializers.Serializer):
+    id = serializers.CharField(read_only=True)
+    name = serializers.CharField(max_length=120)
+    email = serializers.EmailField()
+    phone = serializers.CharField(max_length=20)
+    image = serializers.CharField(required=False, allow_blank=True)
+    role = serializers.ChoiceField(choices=["customer", "staff", "admin"], default="customer")
+    created_at = serializers.DateTimeField(read_only=True)
 
-    id = serializers.SerializerMethodField()
-    image = serializers.CharField(read_only=True)
-
-    class Meta:
-        model = User
-        fields = [
-            "id",
-            "first_name",
-            "last_name",
-            "email",
-            "password",
-            "phone",
-            "user_type",
-            "age",
-            "image",
-            "is_active",
-            "is_staff",
-            "is_superuser",
-            "created_at",
-            "updated_at",
-        ]
-
-        read_only_fields = [
-            "id",
-            "created_at",
-            "updated_at",
-            "image",
-            "is_staff",
-            "is_superuser",
-        ]
-
-        extra_kwargs = {
-            "password": {"write_only": True},
-            "phone": {"required": True},
-            "age": {"required": True},
+    def to_representation(self, instance):
+        return {
+            "id": str(instance.id),
+            "name": instance.name,
+            "email": instance.email,
+            "phone": instance.phone,
+            "image": instance.image or "",
+            "role": instance.role,
+            "created_at": instance.created_at,
         }
 
-    def get_id(self, obj):
-        return str(obj.id)
+
+class RegisterSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=120)
+    email = serializers.CharField(max_length=255)
+    password = serializers.CharField(min_length=8, write_only=True)
+    phone = serializers.CharField(max_length=20)
+    role = serializers.ChoiceField(choices=["customer", "staff", "admin"], default="customer")
+    key = serializers.CharField(required=False, allow_blank=True)
+    image = serializers.FileField(required=False, write_only=True)
 
     def validate_email(self, value):
-        """Ensure email uniqueness and normalized storage."""
         email = (value or "").strip().lower()
-        if not email:
-            raise serializers.ValidationError("Email is required.")
-
-        normalized_email = User.objects.normalize_email(email)
-        qs = User.objects.filter(email=normalized_email)
-        if self.instance:
-            qs = qs.exclude(pk=self.instance.pk)
-
-        if qs.exists():
-            raise serializers.ValidationError("A user with this email already exists.")
-
-        return normalized_email
+        if "@" not in email:
+            raise serializers.ValidationError("Email address is not valid")
+        if User.objects(email=email).first():
+            raise serializers.ValidationError("User with this email already exists")
+        return email
 
     def validate_password(self, value):
-        password = (value or "").strip()
-
-        if not password:
-            raise serializers.ValidationError("Password is required.")
-
-        if len(password) < 8:
-            raise serializers.ValidationError("Password must be at least 8 characters long.")
-
-        if password.isdigit() or password.isalpha():
-            raise serializers.ValidationError("Password must include both letters and numbers.")
-
-        return password
-
-    def validate_age(self, value):
-        if value is None:
-            raise serializers.ValidationError("Age is required.")
-
-        if value < 18:
-            raise serializers.ValidationError("Age must be 18 or older.")
-
+        if len(value or "") < 8:
+            raise serializers.ValidationError("Password must contain at least 8 characters")
         return value
 
     def validate_phone(self, value):
-        phone = (value or "").strip()
-
-        if not phone:
-            raise serializers.ValidationError("Phone number is required.")
-
-        return phone
-
-    def validate(self, attrs):
-        if not self.instance and not attrs.get("password"):
-            raise serializers.ValidationError({"password": "Password is required."})
-        return attrs
-
-    def create(self, validated_data):
-        password = validated_data.pop("password")
-        return User.objects.create_user(password=password, **validated_data)
+        if not (value or "").strip():
+            raise serializers.ValidationError("Phone must not be empty")
+        return value
 
 
-class UserUpdateSerializer(serializers.Serializer):
-    first_name = serializers.CharField(max_length=150, required=False)
-    last_name = serializers.CharField(max_length=150, required=False)
+class LoginSerializer(serializers.Serializer):
+    email = serializers.CharField(max_length=255)
+    password = serializers.CharField(write_only=True)
+
+    def validate_email(self, value):
+        email = (value or "").strip().lower()
+        if "@" not in email:
+            raise serializers.ValidationError("Email address is not valid")
+        return email
+
+
+class UpdateProfileSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=120, required=False)
     phone = serializers.CharField(max_length=20, required=False)
-    age = serializers.IntegerField(required=False)
-
-    def validate_age(self, value):
-        if value < 18 and value is not None and value > 60:
-            raise serializers.ValidationError("Age must be between 18 and 60.")
-        return value
-
-    def validate_phone(self, value):
-        phone = (value or "").strip()
-        if not phone:
-            raise serializers.ValidationError("Phone number cannot be empty.")
-        return phone
+    image = serializers.FileField(required=False, write_only=True)
 
 
-class ChangePasswordSerializer(serializers.Serializer):
-    old_password = serializers.CharField(required=True)
-    new_password = serializers.CharField(required=True)
+class UserDeleteSerializer(serializers.Serializer):
+    user_id = serializers.CharField()
 
-    def validate_new_password(self, value):
-        password = (value or "").strip()
-        if len(password) < 8:
-            raise serializers.ValidationError("Password must be at least 8 characters long.")
-        if password.isdigit() or password.isalpha():
-            raise serializers.ValidationError("Password must include both letters and numbers.")
-        return password
+    def validate_user_id(self, value):
+        try:
+            ObjectId(value)
+            return value
+        except Exception as exc:
+            raise serializers.ValidationError("Invalid user id") from exc

@@ -1,40 +1,16 @@
 from django.urls import path
-from apps.users.views import (
-    ChangePasswordView,
-    UserCreateView,
-    UserDeleteView,
-    UserGetAllView,
-    UserGetByCategoryView,
-    UserInfoView,
-    UserLoginView,
-    UserLogoutView,
-    UserUpdateView,
-    UserUpdatePhotoView,
-)
+
+from apps.users.views import LoginView, LogoutView, ProfileView, RefreshTokenView, RegisterView, UserDetailView, UsersListView
+
 
 urlpatterns = [
-    path("create/", UserCreateView.as_view(), name="user-create"),
-    path("create", UserCreateView.as_view(), name="user-create-noslash"),
-    path("getall/", UserGetAllView.as_view(), name="user-getall"),
-    path("getall", UserGetAllView.as_view(), name="user-getall-noslash"),
-    path("info/", UserInfoView.as_view(), name="user-info"),
-    path("info", UserInfoView.as_view(), name="user-info-noslash"),
-    path("update/", UserUpdateView.as_view(), name="user-update"),
-    path("update", UserUpdateView.as_view(), name="user-update-noslash"),
-    path("update-photo/", UserUpdatePhotoView.as_view(), name="user-update-photo"),
-    path("update-photo", UserUpdatePhotoView.as_view(), name="user-update-photo-noslash"),
-    path("change-password/", ChangePasswordView.as_view(), name="user-change-password"),
-    path("change-password", ChangePasswordView.as_view(), name="user-change-password-noslash"),
-    path("login/", UserLoginView.as_view(), name="user-login"),
-    path("login", UserLoginView.as_view(), name="user-login-noslash"),
-    path("logout/", UserLogoutView.as_view(), name="user-logout"),
-    path("logout", UserLogoutView.as_view(), name="user-logout-noslash"),
-    path("delete/<str:user_id>/", UserDeleteView.as_view(), name="user-delete"),
-    path("delete/<str:user_id>", UserDeleteView.as_view(), name="user-delete-noslash"),
-    path("category/<str:category>/", UserGetByCategoryView.as_view(), name="user-get-by-category"),
-    path("category/<str:category>", UserGetByCategoryView.as_view(), name="user-get-by-category-noslash"),
-    path("all/", UserGetAllView.as_view(), name="user-getall-legacy"),
-    path("all", UserGetAllView.as_view(), name="user-getall-legacy-noslash"),
-    path("by-category/<str:category>/", UserGetByCategoryView.as_view(), name="user-get-by-category-legacy"),
-    path("by-category/<str:category>", UserGetByCategoryView.as_view(), name="user-get-by-category-legacy-noslash"),
+    path("auth/register/", RegisterView.as_view(), name="auth-register"),
+    path("auth/login/", LoginView.as_view(), name="auth-login"),
+    path("auth/logout/", LogoutView.as_view(), name="auth-logout"),
+    path("auth/refresh/", RefreshTokenView.as_view(), name="auth-refresh"),
+    path("users/me/", ProfileView.as_view(), name="users-me"),
+    path("users/profile/", ProfileView.as_view(), name="users-profile"),
+    path("users/getall", UsersListView.as_view(), name="users-list"),
+    path("users/<str:user_id>/", UserDetailView.as_view(), name="users-detail"),
+    path("users/deleting/<str:user_id>/", UserDetailView.as_view(), name="users-delete"),
 ]

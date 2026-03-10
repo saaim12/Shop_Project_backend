@@ -1,107 +1,87 @@
-from apps.users.models import User
+from django.conf import settings
+
 from apps.services.s3_service import S3Service
+from apps.users.models import User
 
 
 class UserService:
-    @staticmethod
-    def create_user(data, image_file=None):
-        if image_file:
-            s3_service = S3Service()
-            image_url = s3_service.upload_image(image_file)
-            data["image"] = image_url
-
-        password = data.pop("password")
-        user = User.objects.create_user(password=password, **data)
-        return user
 
     @staticmethod
-    def create_superuser(data, key, image_file=None):
-        if image_file:
-            s3_service = S3Service()
-            image_url = s3_service.upload_image(image_file)
-            data["image"] = image_url
+    def create_user(payload, image_file=None):
+        email = payload["email"].strip().lower()
 
-        password = data.pop("password")
-        user = User.objects.create_superuser(password=password, key=key, **data)
-        return user
+        if User.objects(email=email).first():
+            raise ValueError("Email already exists")
 
-    @staticmethod
-    def get_user_info(user_id):
-        user = User.objects.filter(id=user_id).first()
-        if not user:
-            raise ValueError("User not found")
-        return user
+        role = payload.get("role", User.ROLE_CUSTOMER)
+        key = payload.get("key")
 
-    @staticmethod
-    def delete_user(user_id):
-        user = User.objects.filter(id=user_id).first()
+        if role == User.ROLE_STAFF and key != settings.SECRET_KEY_FOR_STAFF_USER:
+            raise ValueError("Invalid staff key")
 
-        if not user:
-            raise ValueError("User not found")
+        if role == User.ROLE_ADMIN and key != settings.SECRET_KEY_FOR_ADMIN_USER:
+            raise ValueError("Invalid admin key")
 
-        if user.image:
-            s3_service = S3Service()
-            s3_service.delete_image(user.image)
-
-        user.delete()
-        return True
-
-    @staticmethod
-    def list_users(filters=None):
-        filters = filters or {}
-        queryset = User.objects.all().order_by("-created_at")
-
-        email = (filters.get("email") or "").strip()
-        user_type = (filters.get("user_type") or "").strip()
-        is_active = filters.get("is_active")
-
-        if email:
-            queryset = queryset.filter(email__icontains=email)
-        if user_type:
-            queryset = queryset.filter(user_type=user_type)
-        if is_active is not None:
-            queryset = queryset.filter(is_active=is_active)
-
-        return queryset
-
-    @staticmethod
-    def update_user_profile(user_id, data, image_file=None):
-        user = User.objects.filter(id=user_id).first()
-        if not user:
-            raise ValueError("User not found")
-
-        old_image = user.image
-
-        for field in ["first_name", "last_name", "phone", "age"]:
-            if field in data:
-                setattr(user, field, data[field])
+        image_url = ""
 
         if image_file:
-            s3_service = S3Service()
-            image_url = s3_service.upload_image(image_file)
-            user.image = image_url
-            if old_image:
-                s3_service.delete_image(old_image)
+            image_url = S3Service().upload_image(image_file, folder="users")
 
-        user.full_clean()
+        user = User(
+            name=payload["name"],
+            email=email,
+            phone=payload["phone"],
+            image=image_url,
+            role=role,
+        )
+
+        user.set_password(payload["password"])
         user.save()
+
         return user
 
     @staticmethod
-    def change_password(user, old_password, new_password):
-        if not user.check_password(old_password):
-            raise ValueError("Old password is incorrect")
+    def update_profile(user, payload, image_file=None):
 
-        user.set_password(new_password)
-        user.save(update_fields=["password", "updated_at"])
-        return True
+        if "name" in payload:
+            user.name = payload["name"]
+
+        if "phone" in payload:
+            user.phone = payload["phone"]
+
+        if image_file:
+
+            # delete old image if exists
+            if user.image:
+                try:
+                    S3Service().delete_image(user.image)
+                except Exception:
+                    pass
+
+            user.image = S3Service().upload_image(image_file, folder="users")
+
+        user.save()
+
+        return user
 
     @staticmethod
-    def soft_delete_user(user_id):
-        user = User.objects.filter(id=user_id).first()
-        if not user:
-            raise ValueError("User not found")
+    def delete_user(request_user, target_user):
 
-        user.is_active = False
-        user.save(update_fields=["is_active", "updated_at"])
-        return True
+        print("SERVICE DELETE CALLED")
+
+        if request_user.role == User.ROLE_ADMIN:
+            pass
+
+        elif str(request_user.id) == str(target_user.id):
+            pass
+
+        else:
+            raise ValueError("You can only delete your own account")
+
+        if target_user.image:
+            try:
+                S3Service().delete_image(target_user.image)
+            except Exception:
+                pass
+
+        target_user.delete()
