@@ -1,5 +1,7 @@
 from bson import ObjectId
 
+from django.conf import settings
+
 from apps.cars.models import Car
 from apps.services.s3_service import S3Service
 
@@ -100,7 +102,7 @@ class CarService:
             raise ValueError("No images provided")
         s3_service = S3Service()
         for image_file in image_files:
-            url = s3_service.upload_image(image_file, folder="cars")
+            url = s3_service.upload_image(image_file, folder=settings.S3_CARS_FOLDER)
             car.images.append(url)
         car.save()
         return car

@@ -1,4 +1,5 @@
 from bson import ObjectId
+from django.conf import settings
 
 from apps.cars.models import Car
 from apps.services.s3_service import S3Service
@@ -65,11 +66,12 @@ class SparePartService:
         if image_files:
             s3_service = S3Service()
             for image_file in image_files:
-                image_urls.append(s3_service.upload_image(image_file, folder="spare-parts"))
+                image_urls.append(s3_service.upload_image(image_file, folder=settings.S3_SPARE_PARTS_FOLDER))
 
         part = SparePart(
             name=payload["name"],
             description=payload.get("description", ""),
+            category=payload.get("category", SparePart.CATEGORY_OTHER),
             price=payload["price"],
             quantity=payload.get("quantity", 1),
             condition=condition,
@@ -96,6 +98,21 @@ class SparePartService:
 
     @staticmethod
     def delete_spare_part(part):
+        s3_service = S3Service()
+
+        for url in list(part.images or []):
+            try:
+                s3_service.delete_image(url)
+            except Exception:
+                pass
+
+        legacy_image = getattr(part, "image", "") or ""
+        if legacy_image:
+            try:
+                s3_service.delete_image(legacy_image)
+            except Exception:
+                pass
+
         part.delete()
 
     @staticmethod
@@ -115,6 +132,8 @@ class SparePartService:
             part.name = payload["name"]
         if "description" in payload:
             part.description = payload.get("description") or ""
+        if "category" in payload:
+            part.category = payload["category"]
         if "price" in payload:
             part.price = payload["price"]
         if "quantity" in payload:
@@ -134,7 +153,7 @@ class SparePartService:
             raise ValueError("No images provided")
         s3_service = S3Service()
         for image_file in image_files:
-            url = s3_service.upload_image(image_file, folder="spare-parts")
+            url = s3_service.upload_image(image_file, folder=settings.S3_SPARE_PARTS_FOLDER)
             part.images.append(url)
         part.save()
         return part

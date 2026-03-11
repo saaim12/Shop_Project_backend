@@ -17,8 +17,6 @@ class RegisterView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def post(self, request):
-        print("FILES:", request.FILES)
-        print("DATA:", request.data)
         serializer = RegisterSerializer(data=request.data)
         if not serializer.is_valid():
             return error_response(extract_error_message(serializer.errors), status.HTTP_400_BAD_REQUEST)
@@ -105,7 +103,7 @@ class ProfileView(APIView):
         return success_response(UserSerializer(request.user).data, message="Profile fetched successfully")
 
     def put(self, request):
-        serializer = UpdateProfileSerializer(data=request.data)
+        serializer = UpdateProfileSerializer(data=request.data, context={"user_id": str(request.user.id)})
         if not serializer.is_valid():
             return error_response(extract_error_message(serializer.errors), status.HTTP_400_BAD_REQUEST)
 
@@ -182,11 +180,6 @@ class UserDetailView(APIView):
         return success_response(UserSerializer(target_user).data, message="User updated successfully")
 
     def delete(self, request, user_id):
-
-        print("DELETE VIEW HIT")
-        print("CURRENT USER:", request.user.id, request.user.role)
-        print("TARGET USER:", user_id)
-
         try:
             target_user = User.objects.get(id=ObjectId(user_id))
         except Exception:

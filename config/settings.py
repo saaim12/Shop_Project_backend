@@ -123,6 +123,11 @@ DO_SPACES_REGION = config("DO_SPACES_REGION", default="")
 DO_SPACES_ENDPOINT = config("DO_SPACES_ENDPOINT", default="")
 DO_SPACES_BASE_URL = config("DO_SPACES_BASE_URL", default="")
 
+# Upload folders
+S3_USERS_FOLDER = config("S3_USERS_FOLDER", default="users")
+S3_CARS_FOLDER = config("S3_CARS_FOLDER", default="cars")
+S3_SPARE_PARTS_FOLDER = config("S3_SPARE_PARTS_FOLDER", default="spare_parts")
+
 
 # S3 enabled flag
 USE_S3_STORAGE = all(

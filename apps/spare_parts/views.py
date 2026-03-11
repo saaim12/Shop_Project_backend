@@ -4,6 +4,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 
 from apps.cars.models import Car
+from apps.spare_parts.models import SparePart
 from apps.spare_parts.serializers import SparePartSerializer
 from apps.spare_parts.services import SparePartService
 from apps.services.s3_service import UploadFailedError, UploadValidationError
@@ -88,6 +89,7 @@ class SparePartCreateDataView(APIView):
 
         payload = {
             "conditions": ["new", "used", "external"],
+            "categories": SparePart.CATEGORY_CHOICES,
             "cars": car_options,
             "defaults": {"quantity": 1},
         }
@@ -96,6 +98,7 @@ class SparePartCreateDataView(APIView):
 
 class SparePartDetailView(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_authenticators(self):
         if self.request.method == "GET":
@@ -138,18 +141,29 @@ class SparePartDetailView(APIView):
         body = request.data.dict() if hasattr(request.data, "dict") else dict(request.data)
         payload = {**request.query_params.dict(), **body}
         payload.pop("images", None)
+        image_files = request.FILES.getlist("images")
 
-        if not payload:
+        if not payload and not image_files:
             return error_response("No fields provided to update", status.HTTP_400_BAD_REQUEST)
 
-        serializer = SparePartSerializer(data=payload, partial=True)
-        if not serializer.is_valid():
-            return error_response(extract_error_message(serializer.errors), status.HTTP_400_BAD_REQUEST)
+        if payload:
+            serializer = SparePartSerializer(data=payload, partial=True)
+            if not serializer.is_valid():
+                return error_response(extract_error_message(serializer.errors), status.HTTP_400_BAD_REQUEST)
+            validated_payload = serializer.validated_data
+        else:
+            validated_payload = {}
 
         try:
-            updated_part = SparePartService.update_spare_part(part, serializer.validated_data)
+            updated_part = SparePartService.update_spare_part(part, validated_payload)
+            if image_files:
+                updated_part = SparePartService.add_images(updated_part, image_files)
         except ValueError as exc:
             return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
+        except UploadValidationError as exc:
+            return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
+        except UploadFailedError as exc:
+            return error_response(str(exc), status.HTTP_502_BAD_GATEWAY)
 
         return success_response(SparePartSerializer(updated_part).data, message="Spare part updated successfully")
 

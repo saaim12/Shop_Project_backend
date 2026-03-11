@@ -8,8 +8,8 @@ def home(request):
     return JsonResponse(
         {
             "status": "ok",
-            "service": "Auto Spare Parts API",
-            "database": "connected" if is_mongo_connected() else "disconnected",
+            "service": "Garage Backend fully active",
+            "database": "Mongo DB is connected" if is_mongo_connected() else "Mongo DB is not connected",
             "debug": settings.DEBUG,
         }
     )

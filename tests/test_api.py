@@ -99,13 +99,13 @@ class AutoSparePartsAPITestCase(APITestCase):
         self._auth(staff_token)
 
         car_resp = self.client.post(
-            "/api/cars/",
+            "/api/cars/create/",
             {
+                "number_plate": "ABC-1234",
+                "color": "Blue",
                 "brand": "BMW",
                 "model": "M3",
                 "year": 2020,
-                "vin_number": "VIN-IMG-12345",
-                "description": "Sports",
                 "images": [self._image("car1.png"), self._image("car2.png")],
             },
             format="multipart",
@@ -120,6 +120,7 @@ class AutoSparePartsAPITestCase(APITestCase):
             {
                 "name": "Brake Disc",
                 "description": "Used",
+                "category": "brakes",
                 "price": 150,
                 "condition": "used",
                 "car_id": car_id,
@@ -129,7 +130,8 @@ class AutoSparePartsAPITestCase(APITestCase):
         )
         self.assertEqual(part_resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(len(part_resp.data["data"]["images"]), 2)
-        self.assertTrue(all(url.startswith("/media/spares/") for url in part_resp.data["data"]["images"]))
+        self.assertTrue(all(url.startswith("/media/spare_parts/") for url in part_resp.data["data"]["images"]))
+        self.assertEqual(part_resp.data["data"]["category"], "brakes")
         self.assertEqual(part_resp.data["data"]["car_id"], car_id)
 
         cars_get = self.client.get(f"/api/cars/{car_id}/")
@@ -183,13 +185,13 @@ class AutoSparePartsAPITestCase(APITestCase):
         self._auth(token)
 
         response = self.client.post(
-            "/api/cars/",
+            "/api/cars/create/",
             {
+                "number_plate": "CUST-1111",
+                "color": "Black",
                 "brand": "Honda",
                 "model": "Civic",
                 "year": 2022,
-                "vin_number": "VIN-CUST-111",
-                "description": "Sedan",
             },
             format="json",
         )
@@ -213,6 +215,7 @@ class AutoSparePartsAPITestCase(APITestCase):
             {
                 "name": "Brake Disc",
                 "description": "Used",
+                "category": "brakes",
                 "price": 200,
                 "condition": "used",
                 "car_id": "507f1f77bcf86cd799439011",
@@ -233,3 +236,122 @@ class AutoSparePartsAPITestCase(APITestCase):
             )
         self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
         self.assertIsNone(User.objects(email="failupload@example.com").first())
+
+    def test_invalid_permission_customer_cannot_create_or_delete_spare_part(self):
+        self._register("Cust", "cust-sp@example.com", "Pass1234", "+923008888888")
+        token = self._login("cust-sp@example.com", "Pass1234")
+        self._auth(token)
+
+        create_response = self.client.post(
+            "/api/spare-parts/",
+            {
+                "name": "Air Filter",
+                "description": "Customer should not create",
+                "category": "filter",
+                "price": 40,
+                "condition": "new",
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(create_response.data["error"], "Only staff or admin can create spare parts")
+
+        staff_register = self._register(
+            "Staff Two",
+            "staff2@example.com",
+            "Pass1234",
+            "+923007777777",
+            role="staff",
+            key=settings.SECRET_KEY_FOR_STAFF_USER,
+        )
+        self.assertEqual(staff_register.status_code, status.HTTP_201_CREATED)
+        staff_token = self._login("staff2@example.com", "Pass1234")
+        self._auth(staff_token)
+
+        create_by_staff = self.client.post(
+            "/api/spare-parts/",
+            {
+                "name": "Headlight Bulb",
+                "description": "Created by staff",
+                "category": "headlights",
+                "price": 55,
+                "condition": "new",
+            },
+            format="json",
+        )
+        self.assertEqual(create_by_staff.status_code, status.HTTP_201_CREATED)
+        part_id = create_by_staff.data["data"]["id"]
+
+        self._auth(token)
+        delete_response = self.client.delete(f"/api/spare-parts/{part_id}/")
+        self.assertEqual(delete_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(delete_response.data["error"], "Only staff or admin can delete spare parts")
+
+    def test_delete_spare_part_removes_images_from_storage(self):
+        self._register(
+            "Staff Img",
+            "staffimg@example.com",
+            "Pass1234",
+            "+923006666666",
+            role="staff",
+            key=settings.SECRET_KEY_FOR_STAFF_USER,
+        )
+        staff_token = self._login("staffimg@example.com", "Pass1234")
+        self._auth(staff_token)
+
+        part_resp = self.client.post(
+            "/api/spare-parts/",
+            {
+                "name": "Filter Set",
+                "description": "Delete cleanup",
+                "category": "filter",
+                "price": 25,
+                "condition": "new",
+                "images": [self._image("a.png"), self._image("b.png")],
+            },
+            format="multipart",
+        )
+        self.assertEqual(part_resp.status_code, status.HTTP_201_CREATED)
+        part_id = part_resp.data["data"]["id"]
+
+        with patch("apps.services.s3_service.S3Service.delete_image") as delete_mock:
+            delete_resp = self.client.delete(f"/api/spare-parts/{part_id}/")
+
+        self.assertEqual(delete_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(delete_mock.call_count, 2)
+
+    def test_patch_spare_part_can_add_images(self):
+        self._register(
+            "Staff Patch",
+            "staffpatch@example.com",
+            "Pass1234",
+            "+923005555555",
+            role="staff",
+            key=settings.SECRET_KEY_FOR_STAFF_USER,
+        )
+        staff_token = self._login("staffpatch@example.com", "Pass1234")
+        self._auth(staff_token)
+
+        create_resp = self.client.post(
+            "/api/spare-parts/",
+            {
+                "name": "Patchable Part",
+                "description": "No images initially",
+                "category": "filter",
+                "price": 75,
+                "condition": "new",
+            },
+            format="json",
+        )
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+        part_id = create_resp.data["data"]["id"]
+        self.assertEqual(create_resp.data["data"]["images"], [])
+
+        patch_resp = self.client.patch(
+            f"/api/spare-parts/{part_id}/",
+            {"images": [self._image("p1.png"), self._image("p2.png")]},
+            format="multipart",
+        )
+        self.assertEqual(patch_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(patch_resp.data["data"]["images"]), 2)
+        self.assertTrue(all(url.startswith("/media/spare_parts/") for url in patch_resp.data["data"]["images"]))

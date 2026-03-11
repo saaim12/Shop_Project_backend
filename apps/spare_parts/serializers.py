@@ -9,6 +9,7 @@ class SparePartSerializer(serializers.Serializer):
     id = serializers.CharField(read_only=True)
     name = serializers.CharField(max_length=120)
     description = serializers.CharField(required=False, allow_blank=True)
+    category = serializers.ChoiceField(choices=SparePart.CATEGORY_CHOICES, required=False, default=SparePart.CATEGORY_OTHER)
     price = serializers.FloatField(min_value=0)
     quantity = serializers.FloatField(min_value=1, required=False, default=1)
     condition = serializers.ChoiceField(choices=["new", "used", "external"])
@@ -55,6 +56,7 @@ class SparePartSerializer(serializers.Serializer):
             "id": str(instance.id),
             "name": instance.name,
             "description": instance.description,
+            "category": getattr(instance, "category", SparePart.CATEGORY_OTHER),
             "price": instance.price,
             "quantity": instance.quantity,
             "condition": instance.condition,

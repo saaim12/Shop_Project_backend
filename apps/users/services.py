@@ -25,7 +25,7 @@ class UserService:
         image_url = ""
 
         if image_file:
-            image_url = S3Service().upload_image(image_file, folder="users")
+            image_url = S3Service().upload_image(image_file, folder=settings.S3_USERS_FOLDER)
 
         user = User(
             name=payload["name"],
@@ -46,8 +46,20 @@ class UserService:
         if "name" in payload:
             user.name = payload["name"]
 
+        if "email" in payload:
+            new_email = (payload["email"] or "").strip().lower()
+            if new_email and new_email != user.email:
+                if User.objects(email=new_email).first():
+                    raise ValueError("Email already in use")
+                user.email = new_email
+
         if "phone" in payload:
             user.phone = payload["phone"]
+
+        if "old_password" in payload and "new_password" in payload:
+            if not user.check_password(payload["old_password"]):
+                raise ValueError("Current password is incorrect")
+            user.set_password(payload["new_password"])
 
         if image_file:
 
@@ -58,7 +70,7 @@ class UserService:
                 except Exception:
                     pass
 
-            user.image = S3Service().upload_image(image_file, folder="users")
+            user.image = S3Service().upload_image(image_file, folder=settings.S3_USERS_FOLDER)
 
         user.save()
 
@@ -66,9 +78,6 @@ class UserService:
 
     @staticmethod
     def delete_user(request_user, target_user):
-
-        print("SERVICE DELETE CALLED")
-
         if request_user.role == User.ROLE_ADMIN:
             pass
 

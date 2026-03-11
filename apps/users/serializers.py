@@ -66,8 +66,32 @@ class LoginSerializer(serializers.Serializer):
 
 class UpdateProfileSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=120, required=False)
+    email = serializers.CharField(max_length=255, required=False)
     phone = serializers.CharField(max_length=20, required=False)
     image = serializers.FileField(required=False, write_only=True)
+    old_password = serializers.CharField(min_length=8, write_only=True, required=False)
+    new_password = serializers.CharField(min_length=8, write_only=True, required=False)
+
+    def validate(self, attrs):
+        old_password = attrs.get("old_password")
+        new_password = attrs.get("new_password")
+        if old_password and not new_password:
+            raise serializers.ValidationError("new_password is required when old_password is provided")
+        if new_password and not old_password:
+            raise serializers.ValidationError("old_password is required when new_password is provided")
+        return attrs
+
+    def validate_email(self, value):
+        email = (value or "").strip().lower()
+        if not email:
+            return email
+        if "@" not in email:
+            raise serializers.ValidationError("Email address is not valid")
+        existing = User.objects(email=email).first()
+        # Allow keeping the same email (checked against current user in the view)
+        if existing and str(existing.id) != str(self.context.get("user_id", "")):
+            raise serializers.ValidationError("Email already in use")
+        return email
 
 
 class UserDeleteSerializer(serializers.Serializer):
