@@ -168,6 +168,17 @@ class SparePartDetailView(APIView):
         return success_response(SparePartSerializer(updated_part).data, message="Spare part updated successfully")
 
 
+class PublicSparePartDetailView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request, part_id):
+        part = SparePartService.get_spare_part_by_id(part_id)
+        if not part:
+            return error_response("Spare part not found", status.HTTP_404_NOT_FOUND)
+        return success_response(SparePartSerializer(part).data, message="Spare part fetched successfully")
+
+
 class SparePartImagesView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
