@@ -15,7 +15,8 @@ class OrderListCreateView(APIView):
         return success_response([OrderSerializer(order).data for order in orders], message="Orders fetched successfully")
 
     def post(self, request):
-        if request.user.role != "customer":
+        role = (getattr(request.user, "role", "") or "").upper()
+        if role != "CUSTOMER":
             return error_response("Only customers can place orders", status.HTTP_403_FORBIDDEN)
 
         serializer = OrderCreateSerializer(data=request.data)
@@ -38,7 +39,8 @@ class OrderDetailView(APIView):
         if not order:
             return error_response("Order not found", status.HTTP_404_NOT_FOUND)
 
-        if request.user.role == "customer" and str(order.customer.id) != str(request.user.id):
+        role = (getattr(request.user, "role", "") or "").upper()
+        if role == "CUSTOMER" and str(order.customer.id) != str(request.user.id):
             return error_response("Forbidden", status.HTTP_403_FORBIDDEN)
 
         return success_response(OrderSerializer(order).data, message="Order fetched successfully")
@@ -48,7 +50,8 @@ class OrderDetailView(APIView):
         if not order:
             return error_response("Order not found", status.HTTP_404_NOT_FOUND)
 
-        if request.user.role not in {"staff", "admin"}:
+        role = (getattr(request.user, "role", "") or "").upper()
+        if role not in {"STAFF", "ADMIN"}:
             return error_response("Only staff or admin can update order status", status.HTTP_403_FORBIDDEN)
 
         serializer = OrderStatusUpdateSerializer(data=request.data)
@@ -57,3 +60,18 @@ class OrderDetailView(APIView):
 
         order = OrderService.update_order_status(order, serializer.validated_data["status"])
         return success_response(OrderSerializer(order).data, message="Order updated successfully")
+
+    def delete(self, request, order_id):
+        order = OrderService.get_order_by_id(order_id)
+        if not order:
+            return error_response("Order not found", status.HTTP_404_NOT_FOUND)
+
+        role = (getattr(request.user, "role", "") or "").upper()
+        if role != "CUSTOMER":
+            return error_response("Only customers can delete orders", status.HTTP_403_FORBIDDEN)
+
+        if str(order.customer.id) != str(request.user.id):
+            return error_response("Forbidden", status.HTTP_403_FORBIDDEN)
+
+        OrderService.delete_order(order)
+        return success_response({"deleted": True}, message="Order deleted successfully")

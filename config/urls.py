@@ -8,11 +8,12 @@ handler404 = "config.exceptions.custom_404"
 
 urlpatterns = [
     path("", home, name="health"),
-    path("api/", include("apps.users.urls")),
-    path("api/cars/", include("apps.cars.urls")),
-    path("api/spare-parts/", include("apps.spare_parts.urls")),
-    path("api/orders/", include("apps.orders.urls")),
-    path("api/inventory/", include("apps.inventory.urls")),
+    path("", include("apps.users.urls")),
+    path("spare-parts/", include("apps.spare_parts.urls")),
+    path("cars/", include("apps.cars.urls")),
+    path("tyres/", include("apps.tyres.urls")),
+    path("rims/", include("apps.rims.urls")),
+    path("inventory/", include("apps.inventory.urls")),
 ]
 
 if settings.DEBUG and not settings.USE_S3_STORAGE:

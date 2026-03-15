@@ -1,21 +1,32 @@
 from rest_framework.permissions import BasePermission
 
 
+def role_of(user):
+    return (getattr(user, "role", "") or "").upper()
+
+
 class IsAdmin(BasePermission):
+
     def has_permission(self, request, view):
-        return bool(getattr(request, "user", None) and request.user.role == "admin")
+
+        return bool(request.user and role_of(request.user) == "ADMIN")
 
 
-class IsStaffOrAdmin(BasePermission):
+class IsStaffOrAdminOnly(BasePermission):
     def has_permission(self, request, view):
-        return bool(getattr(request, "user", None) and request.user.role in {"staff", "admin"})
-
-
-class IsCustomer(BasePermission):
-    def has_permission(self, request, view):
-        return bool(getattr(request, "user", None) and request.user.role == "customer")
+        return bool(request.user and role_of(request.user) in {"STAFF", "ADMIN"})
 
 
 class IsSelfOrAdmin(BasePermission):
+
     def has_object_permission(self, request, view, obj):
-        return bool(request.user.role == "admin" or str(obj.id) == str(request.user.id))
+
+        if role_of(request.user) == "ADMIN":
+            return True
+
+        return str(obj.id) == str(request.user.id)
+
+
+class IsSelfOnly(BasePermission):
+    def has_object_permission(self, request, view, obj):
+        return str(obj.id) == str(request.user.id)

@@ -24,6 +24,8 @@ INSTALLED_APPS = [
     "apps.users",
     "apps.cars",
     "apps.spare_parts",
+    "apps.tyres",
+    "apps.rims",
     "apps.orders",
     "apps.inventory",
 ]
@@ -127,6 +129,8 @@ DO_SPACES_BASE_URL = config("DO_SPACES_BASE_URL", default="")
 S3_USERS_FOLDER = config("S3_USERS_FOLDER", default="users")
 S3_CARS_FOLDER = config("S3_CARS_FOLDER", default="cars")
 S3_SPARE_PARTS_FOLDER = config("S3_SPARE_PARTS_FOLDER", default="spare_parts")
+S3_TYRES_FOLDER = config("S3_TYRES_FOLDER", default="tyres")
+S3_RIMS_FOLDER = config("S3_RIMS_FOLDER", default="rims")
 
 
 # S3 enabled flag
@@ -151,6 +155,8 @@ MIGRATION_MODULES = {
     "users": None,
     "cars": None,
     "spare_parts": None,
+    "tyres": None,
+    "rims": None,
     "orders": None,
     "inventory": None,
 }

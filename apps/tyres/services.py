@@ -1,14 +1,14 @@
 from bson import ObjectId
 from django.conf import settings
 
-from apps.cars.models import Car, CarImage
 from apps.services.s3_service import S3Service
+from apps.tyres.models import Tyre, TyreImage
 
 
-class CarService:
+class TyreService:
     @staticmethod
-    def list_cars(filters=None):
-        query = Car.objects()
+    def list_tyres(filters=None):
+        query = Tyre.objects()
         filters = filters or {}
         for key, value in filters.items():
             if value in (None, ""):
@@ -17,58 +17,55 @@ class CarService:
         return query.order_by("-created_at")
 
     @staticmethod
-    def get_car_by_id(car_id):
+    def get_tyre_by_id(tyre_id):
         try:
-            return Car.objects(id=ObjectId(car_id)).first()
+            return Tyre.objects(id=ObjectId(tyre_id)).first()
         except Exception:
             return None
 
     @staticmethod
-    def create_car(payload):
-        car = Car(
-            name=payload["name"],
-            brand=payload["brand"],
-            model=payload["model"],
-            model_year=payload["model_year"],
-            year=payload["year"],
+    def create_tyre(payload):
+        tyre = Tyre(
+            company=payload["company"],
             condition=payload["condition"],
-            chassis_number=payload["chassis_number"],
+            inches=payload["inches"],
+            type=payload["type"],
             description=payload.get("description", ""),
         )
-        car.save()
-        return car
+        tyre.save()
+        return tyre
 
     @staticmethod
-    def update_car(car, payload):
-        for field in ["name", "brand", "model", "model_year", "year", "condition", "chassis_number", "description"]:
+    def update_tyre(tyre, payload):
+        for field in ["company", "condition", "inches", "type", "description"]:
             if field in payload:
-                setattr(car, field, payload[field])
-        car.save()
-        return car
+                setattr(tyre, field, payload[field])
+        tyre.save()
+        return tyre
 
     @staticmethod
-    def delete_car(car):
-        for image in CarImage.objects(car=car):
+    def delete_tyre(tyre):
+        for image in TyreImage.objects(tyre=tyre):
             try:
                 S3Service().delete_image(image.image)
             except Exception:
                 pass
             image.delete()
-        car.delete()
+        tyre.delete()
 
     @staticmethod
-    def add_images(car, image_files):
+    def add_images(tyre, image_files):
         if not image_files:
             raise ValueError("No images provided")
         s3 = S3Service()
         for image_file in image_files:
-            image_url = s3.upload_image(image_file, folder=settings.S3_CARS_FOLDER)
-            CarImage(car=car, image=image_url).save()
+            image_url = s3.upload_image(image_file, folder=settings.S3_TYRES_FOLDER)
+            TyreImage(tyre=tyre, image=image_url).save()
 
     @staticmethod
     def delete_image(image_id):
         try:
-            image = CarImage.objects(id=ObjectId(image_id)).first()
+            image = TyreImage.objects(id=ObjectId(image_id)).first()
         except Exception:
             image = None
         if not image:
@@ -80,8 +77,8 @@ class CarService:
         image.delete()
 
     @staticmethod
-    def delete_all_images(car):
-        for image in CarImage.objects(car=car):
+    def delete_all_images(tyre):
+        for image in TyreImage.objects(tyre=tyre):
             try:
                 S3Service().delete_image(image.image)
             except Exception:
@@ -91,7 +88,7 @@ class CarService:
     @staticmethod
     def update_image(image_id, image_file):
         try:
-            image_doc = CarImage.objects(id=ObjectId(image_id)).first()
+            image_doc = TyreImage.objects(id=ObjectId(image_id)).first()
         except Exception:
             image_doc = None
         if not image_doc:
@@ -103,6 +100,6 @@ class CarService:
         except Exception:
             pass
 
-        image_doc.image = s3.upload_image(image_file, folder=settings.S3_CARS_FOLDER)
+        image_doc.image = s3.upload_image(image_file, folder=settings.S3_TYRES_FOLDER)
         image_doc.save()
         return image_doc

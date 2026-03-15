@@ -1,9 +1,9 @@
 from django.urls import path
 
-from apps.inventory.views import InventoryDetailView, InventoryListView
+from apps.inventory.views import InventoryDetailView, InventoryListCreateView
 
 
 urlpatterns = [
-    path("", InventoryListView.as_view(), name="inventory-list"),
-    path("<str:inventory_id>/", InventoryDetailView.as_view(), name="inventory-detail"),
+    path("", InventoryListCreateView.as_view(), name="inventory-list-create"),
+    path("<str:inventory_id>", InventoryDetailView.as_view(), name="inventory-detail"),
 ]

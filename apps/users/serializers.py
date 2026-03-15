@@ -1,76 +1,115 @@
-from bson import ObjectId
+import re
 from rest_framework import serializers
-
 from apps.users.models import User
 
 
 class UserSerializer(serializers.Serializer):
+
     id = serializers.CharField(read_only=True)
     name = serializers.CharField(max_length=120)
     email = serializers.EmailField()
-    phone = serializers.CharField(max_length=20)
+    age = serializers.IntegerField(min_value=18, max_value=90)
+    phone_number = serializers.CharField(max_length=20)
+    role = serializers.ChoiceField(choices=["CUSTOMER", "STAFF", "ADMIN"])
     image = serializers.CharField(required=False, allow_blank=True)
-    role = serializers.ChoiceField(choices=["customer", "staff", "admin"], default="customer")
+
     created_at = serializers.DateTimeField(read_only=True)
+    updated_at = serializers.DateTimeField(read_only=True)
 
     def to_representation(self, instance):
+
         return {
             "id": str(instance.id),
             "name": instance.name,
             "email": instance.email,
-            "phone": instance.phone,
-            "image": instance.image or "",
+            "age": instance.age,
+            "phone_number": instance.phone_number,
             "role": instance.role,
+            "image": instance.image or "",
             "created_at": instance.created_at,
+            "updated_at": instance.updated_at,
         }
 
 
 class RegisterSerializer(serializers.Serializer):
+
     name = serializers.CharField(max_length=120)
-    email = serializers.CharField(max_length=255)
+
+    email = serializers.EmailField()
+
+    age = serializers.IntegerField(min_value=18, max_value=90)
+
     password = serializers.CharField(min_length=8, write_only=True)
-    phone = serializers.CharField(max_length=20)
-    role = serializers.ChoiceField(choices=["customer", "staff", "admin"], default="customer")
-    key = serializers.CharField(required=False, allow_blank=True)
-    image = serializers.FileField(required=False, write_only=True)
+
+    phone_number = serializers.CharField(max_length=20)
+
+    role = serializers.CharField(required=False, default="CUSTOMER")
+    image = serializers.CharField(required=False, allow_blank=True)
+    key = serializers.CharField(required=False, allow_blank=True, write_only=True)
 
     def validate_email(self, value):
-        email = (value or "").strip().lower()
-        if "@" not in email:
-            raise serializers.ValidationError("Email address is not valid")
+
+        email = value.lower().strip()
+
         if User.objects(email=email).first():
-            raise serializers.ValidationError("User with this email already exists")
+            raise serializers.ValidationError("Email already exists")
+
         return email
 
     def validate_password(self, value):
         if len(value or "") < 8:
-            raise serializers.ValidationError("Password must contain at least 8 characters")
+            raise serializers.ValidationError("Password must be at least 8 characters")
+
+        if not re.search(r"[A-Za-z]", value):
+            raise serializers.ValidationError(
+                "Password must contain letters"
+            )
+
+        if not re.search(r"[0-9]", value):
+            raise serializers.ValidationError(
+                "Password must contain numbers"
+            )
+
         return value
 
-    def validate_phone(self, value):
-        if not (value or "").strip():
-            raise serializers.ValidationError("Phone must not be empty")
-        return value
+    def validate_role(self, value):
+        role = (value or "CUSTOMER").strip().upper()
+        if role not in {"CUSTOMER", "STAFF", "ADMIN"}:
+            raise serializers.ValidationError("Invalid role")
+        return role
 
 
 class LoginSerializer(serializers.Serializer):
-    email = serializers.CharField(max_length=255)
-    password = serializers.CharField(write_only=True)
 
-    def validate_email(self, value):
-        email = (value or "").strip().lower()
-        if "@" not in email:
-            raise serializers.ValidationError("Email address is not valid")
-        return email
+    email = serializers.EmailField()
+
+    password = serializers.CharField(write_only=True)
 
 
 class UpdateProfileSerializer(serializers.Serializer):
+
     name = serializers.CharField(max_length=120, required=False)
-    email = serializers.CharField(max_length=255, required=False)
-    phone = serializers.CharField(max_length=20, required=False)
-    image = serializers.FileField(required=False, write_only=True)
-    old_password = serializers.CharField(min_length=8, write_only=True, required=False)
-    new_password = serializers.CharField(min_length=8, write_only=True, required=False)
+
+    email = serializers.EmailField(required=False)
+
+    age = serializers.IntegerField(min_value=18, max_value=90, required=False)
+
+    phone_number = serializers.CharField(max_length=20, required=False)
+    image = serializers.CharField(required=False, allow_blank=True)
+
+    old_password = serializers.CharField(min_length=8, required=False, write_only=True)
+    new_password = serializers.CharField(min_length=8, required=False, write_only=True)
+
+    def validate_email(self, value):
+
+        email = value.lower().strip()
+
+        existing = User.objects(email=email).first()
+
+        if existing and str(existing.id) != str(self.context.get("user_id", "")):
+            raise serializers.ValidationError("Email already exists")
+
+        return email
 
     def validate(self, attrs):
         old_password = attrs.get("old_password")
@@ -79,27 +118,10 @@ class UpdateProfileSerializer(serializers.Serializer):
             raise serializers.ValidationError("new_password is required when old_password is provided")
         if new_password and not old_password:
             raise serializers.ValidationError("old_password is required when new_password is provided")
+
+        if new_password:
+            if not re.search(r"[A-Za-z]", new_password):
+                raise serializers.ValidationError("Password must contain letters")
+            if not re.search(r"[0-9]", new_password):
+                raise serializers.ValidationError("Password must contain numbers")
         return attrs
-
-    def validate_email(self, value):
-        email = (value or "").strip().lower()
-        if not email:
-            return email
-        if "@" not in email:
-            raise serializers.ValidationError("Email address is not valid")
-        existing = User.objects(email=email).first()
-        # Allow keeping the same email (checked against current user in the view)
-        if existing and str(existing.id) != str(self.context.get("user_id", "")):
-            raise serializers.ValidationError("Email already in use")
-        return email
-
-
-class UserDeleteSerializer(serializers.Serializer):
-    user_id = serializers.CharField()
-
-    def validate_user_id(self, value):
-        try:
-            ObjectId(value)
-            return value
-        except Exception as exc:
-            raise serializers.ValidationError("Invalid user id") from exc

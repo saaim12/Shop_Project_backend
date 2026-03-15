@@ -1,67 +1,88 @@
-from bson import ObjectId
+from datetime import datetime
+
 from rest_framework import serializers
 
-from apps.cars.models import Car
-from apps.spare_parts.models import SparePart
+from apps.spare_parts.models import SparePart, SparePartImage
+
+
+class SparePartImageSerializer(serializers.Serializer):
+    id = serializers.CharField(read_only=True)
+    image = serializers.CharField()
+
+    def to_representation(self, instance):
+        return {
+            "id": str(instance.id),
+            "image": instance.image,
+        }
 
 
 class SparePartSerializer(serializers.Serializer):
     id = serializers.CharField(read_only=True)
-    name = serializers.CharField(max_length=120)
+    name = serializers.CharField(max_length=150)
+    brand = serializers.CharField(max_length=120)
+    model = serializers.CharField(max_length=120)
+    model_year = serializers.IntegerField(min_value=1951)
+    vehicle_type = serializers.ChoiceField(choices=SparePart.VEHICLE_TYPE_CHOICES)
+    category = serializers.ChoiceField(choices=SparePart.CATEGORY_CHOICES)
+    condition = serializers.ChoiceField(choices=SparePart.CONDITION_CHOICES)
     description = serializers.CharField(required=False, allow_blank=True)
-    category = serializers.ChoiceField(choices=SparePart.CATEGORY_CHOICES, required=False, default=SparePart.CATEGORY_OTHER)
-    price = serializers.FloatField(min_value=0)
-    quantity = serializers.FloatField(min_value=1, required=False, default=1)
-    condition = serializers.ChoiceField(choices=["new", "used", "external"])
-    images = serializers.ListField(child=serializers.CharField(), required=False, read_only=True)
-    car_id = serializers.CharField(required=False, allow_blank=True)
-    created_by = serializers.CharField(read_only=True)
+    item_number = serializers.CharField(required=False, allow_blank=True)
+    article_number = serializers.CharField(required=False, allow_blank=True)
+    ditto_number = serializers.CharField(required=False, allow_blank=True)
+    engine_code = serializers.CharField(required=False, allow_blank=True)
+    engine_spec = serializers.CharField(required=False, allow_blank=True)
+    chassis_number = serializers.CharField(required=False, allow_blank=True)
+    mileage = serializers.IntegerField(required=False, min_value=0)
+    family_card_number = serializers.CharField(required=False, allow_blank=True)
+    oem_numbers = serializers.CharField(required=False, allow_blank=True)
+    identification_numbers = serializers.CharField(required=False, allow_blank=True)
+    images = serializers.SerializerMethodField()
     created_at = serializers.DateTimeField(read_only=True)
+    updated_at = serializers.DateTimeField(read_only=True)
 
-    def validate_car_id(self, value):
-        value = (value or "").strip()
-        if not value:
-            return None
+    def validate_condition(self, value):
+        return (value or "").upper()
 
-        try:
-            car = Car.objects(id=ObjectId(value)).first()
-            if not car:
-                raise serializers.ValidationError("Invalid car reference")
-            return value
-        except Exception as exc:
-            raise serializers.ValidationError("Invalid car reference") from exc
-
-    def validate_price(self, value):
-        if value <= 0:
-            raise serializers.ValidationError("Price must be positive")
+    def validate_model_year(self, value):
+        current_year = datetime.utcnow().year
+        if value <= 1950 or value > current_year:
+            raise serializers.ValidationError("model_year must be greater than 1950 and less than or equal to current year")
         return value
 
-    def validate_quantity(self, value):
-        if value < 1:
-            raise serializers.ValidationError("Quantity must be at least 1")
-        return value
+    def get_images(self, instance):
+        images = SparePartImage.objects(spare_part=instance).order_by("-created_at")
+        return SparePartImageSerializer(images, many=True).data
 
     def to_representation(self, instance):
-        raw = instance.to_mongo().to_dict()
-
-        car_ref = raw.get("car") or raw.get("car_reference")
-        car_id = getattr(car_ref, "id", car_ref) if car_ref is not None else None
-
-        created_by_ref = raw.get("created_by") or raw.get("added_by")
-        created_by_id = getattr(created_by_ref, "id", created_by_ref) if created_by_ref is not None else None
-
-        images = instance.images or []
-
         return {
             "id": str(instance.id),
             "name": instance.name,
-            "description": instance.description,
-            "category": getattr(instance, "category", SparePart.CATEGORY_OTHER),
-            "price": instance.price,
-            "quantity": instance.quantity,
+            "brand": instance.brand,
+            "model": instance.model,
+            "model_year": instance.model_year,
+            "vehicle_type": instance.vehicle_type,
+            "category": instance.category,
             "condition": instance.condition,
-            "images": images,
-            "car_id": str(car_id) if car_id else None,
-            "created_by": str(created_by_id) if created_by_id else None,
+            "description": instance.description,
+            "item_number": instance.item_number,
+            "article_number": instance.article_number,
+            "ditto_number": instance.ditto_number,
+            "engine_code": instance.engine_code,
+            "engine_spec": instance.engine_spec,
+            "chassis_number": instance.chassis_number,
+            "mileage": instance.mileage,
+            "family_card_number": instance.family_card_number,
+            "oem_numbers": instance.oem_numbers,
+            "identification_numbers": instance.identification_numbers,
+            "images": self.get_images(instance),
             "created_at": instance.created_at,
+            "updated_at": instance.updated_at,
         }
+
+
+class SparePartImageWriteSerializer(serializers.Serializer):
+    image = serializers.FileField(required=True)
+
+
+class SparePartImageUpdateSerializer(serializers.Serializer):
+    image = serializers.FileField(required=True)

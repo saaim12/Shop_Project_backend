@@ -3,14 +3,14 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 
-from apps.cars.serializers import CarSerializer
-from apps.cars.services import CarService
+from apps.rims.serializers import RimSerializer
+from apps.rims.services import RimService
 from apps.users.permissions import IsStaffOrAdminOnly
 from config.pagination import DefaultPagination
 from config.response import error_response, extract_error_message, success_response
 
 
-class CarListCreateView(APIView):
+class RimListCreateView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_authenticators(self):
@@ -25,43 +25,40 @@ class CarListCreateView(APIView):
 
     def get(self, request):
         try:
-            model_year = int(request.query_params.get("model_year")) if request.query_params.get("model_year") else None
-            year = int(request.query_params.get("year")) if request.query_params.get("year") else None
+            inches = float(request.query_params.get("inches")) if request.query_params.get("inches") else None
         except ValueError:
-            return error_response("model_year and year must be integers", status.HTTP_400_BAD_REQUEST)
+            return error_response("inches must be numeric", status.HTTP_400_BAD_REQUEST)
 
         filters = {
-            "name": request.query_params.get("name"),
-            "brand": request.query_params.get("brand"),
-            "model": request.query_params.get("model"),
-            "model_year": model_year,
-            "year": year,
+            "company": request.query_params.get("company"),
             "condition": (request.query_params.get("condition") or "").upper() or None,
+            "inches": inches,
+            "type": request.query_params.get("type"),
         }
-        queryset = CarService.list_cars(filters=filters)
+        queryset = RimService.list_rims(filters=filters)
         paginator = DefaultPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
-        data = [CarSerializer(car).data for car in page]
+        data = [RimSerializer(item).data for item in page]
         payload = {
             "count": paginator.page.paginator.count,
             "next": paginator.get_next_link(),
             "previous": paginator.get_previous_link(),
             "results": data,
         }
-        return success_response(payload, message="Cars fetched successfully")
+        return success_response(payload, message="Rims fetched successfully")
 
     def post(self, request):
-        serializer = CarSerializer(data=request.data)
+        serializer = RimSerializer(data=request.data)
         if not serializer.is_valid():
             return error_response(extract_error_message(serializer.errors), status.HTTP_400_BAD_REQUEST)
-        car = CarService.create_car(serializer.validated_data)
+        rim = RimService.create_rim(serializer.validated_data)
         image_files = request.FILES.getlist("images")
         if image_files:
-            CarService.add_images(car, image_files)
-        return success_response(CarSerializer(car).data, status.HTTP_201_CREATED, "Car created successfully")
+            RimService.add_images(rim, image_files)
+        return success_response(RimSerializer(rim).data, status.HTTP_201_CREATED, "Rim created successfully")
 
 
-class CarDetailView(APIView):
+class RimDetailView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_authenticators(self):
@@ -74,60 +71,60 @@ class CarDetailView(APIView):
             return [AllowAny()]
         return [IsAuthenticated(), IsStaffOrAdminOnly()]
 
-    def get(self, request, car_id):
-        car = CarService.get_car_by_id(car_id)
-        if not car:
-            return error_response("Car not found", status.HTTP_404_NOT_FOUND)
-        return success_response(CarSerializer(car).data, message="Car fetched successfully")
+    def get(self, request, rim_id):
+        rim = RimService.get_rim_by_id(rim_id)
+        if not rim:
+            return error_response("Rim not found", status.HTTP_404_NOT_FOUND)
+        return success_response(RimSerializer(rim).data, message="Rim fetched successfully")
 
-    def patch(self, request, car_id):
-        car = CarService.get_car_by_id(car_id)
-        if not car:
-            return error_response("Car not found", status.HTTP_404_NOT_FOUND)
-        serializer = CarSerializer(data=request.data, partial=True)
+    def patch(self, request, rim_id):
+        rim = RimService.get_rim_by_id(rim_id)
+        if not rim:
+            return error_response("Rim not found", status.HTTP_404_NOT_FOUND)
+        serializer = RimSerializer(data=request.data, partial=True)
         if not serializer.is_valid():
             return error_response(extract_error_message(serializer.errors), status.HTTP_400_BAD_REQUEST)
-        updated = CarService.update_car(car, serializer.validated_data)
-        return success_response(CarSerializer(updated).data, message="Car updated successfully")
+        updated = RimService.update_rim(rim, serializer.validated_data)
+        return success_response(RimSerializer(updated).data, message="Rim updated successfully")
 
-    def delete(self, request, car_id):
-        car = CarService.get_car_by_id(car_id)
-        if not car:
-            return error_response("Car not found", status.HTTP_404_NOT_FOUND)
-        CarService.delete_car(car)
-        return success_response({"deleted": True}, message="Car deleted successfully")
+    def delete(self, request, rim_id):
+        rim = RimService.get_rim_by_id(rim_id)
+        if not rim:
+            return error_response("Rim not found", status.HTTP_404_NOT_FOUND)
+        RimService.delete_rim(rim)
+        return success_response({"deleted": True}, message="Rim deleted successfully")
 
 
-class CarImagesView(APIView):
+class RimImagesView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     permission_classes = [IsAuthenticated, IsStaffOrAdminOnly]
 
-    def post(self, request, car_id):
-        car = CarService.get_car_by_id(car_id)
-        if not car:
-            return error_response("Car not found", status.HTTP_404_NOT_FOUND)
+    def post(self, request, rim_id):
+        rim = RimService.get_rim_by_id(rim_id)
+        if not rim:
+            return error_response("Rim not found", status.HTTP_404_NOT_FOUND)
         image_files = request.FILES.getlist("images")
         try:
-            CarService.add_images(car, image_files)
+            RimService.add_images(rim, image_files)
         except ValueError as exc:
             return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
-        return success_response(CarSerializer(car).data, message="Images uploaded successfully")
+        return success_response(RimSerializer(rim).data, message="Images uploaded successfully")
 
-    def delete(self, request, car_id):
-        car = CarService.get_car_by_id(car_id)
-        if not car:
-            return error_response("Car not found", status.HTTP_404_NOT_FOUND)
-        CarService.delete_all_images(car)
-        return success_response(CarSerializer(car).data, message="All images deleted successfully")
+    def delete(self, request, rim_id):
+        rim = RimService.get_rim_by_id(rim_id)
+        if not rim:
+            return error_response("Rim not found", status.HTTP_404_NOT_FOUND)
+        RimService.delete_all_images(rim)
+        return success_response(RimSerializer(rim).data, message="All images deleted successfully")
 
 
-class CarImageDetailView(APIView):
+class RimImageDetailView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     permission_classes = [IsAuthenticated, IsStaffOrAdminOnly]
 
     def delete(self, request, image_id):
         try:
-            CarService.delete_image(image_id)
+            RimService.delete_image(image_id)
         except ValueError as exc:
             return error_response(str(exc), status.HTTP_404_NOT_FOUND)
         return success_response({"deleted": True}, message="Image deleted successfully")
@@ -137,7 +134,7 @@ class CarImageDetailView(APIView):
         if not image_file:
             return error_response("image file is required", status.HTTP_400_BAD_REQUEST)
         try:
-            CarService.update_image(image_id, image_file)
+            RimService.update_image(image_id, image_file)
         except ValueError as exc:
             return error_response(str(exc), status.HTTP_404_NOT_FOUND)
         return success_response({"updated": True}, message="Image updated successfully")

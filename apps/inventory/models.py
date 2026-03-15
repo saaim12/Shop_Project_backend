@@ -1,20 +1,22 @@
 from datetime import datetime
 
-from mongoengine import DateTimeField, Document, IntField, ReferenceField
+from mongoengine import DateTimeField, Document, IntField, ReferenceField, StringField
 
 from apps.spare_parts.models import SparePart
 from apps.users.models import User
 
 
 class Inventory(Document):
-    spare_part = ReferenceField(SparePart, required=True, unique=True)
+    spare_part = ReferenceField(SparePart, required=True)
     quantity = IntField(required=True, min_value=0)
-    updated_by = ReferenceField(User, required=True)
+    storage_position = StringField(default="")
+    added_by = ReferenceField(User, required=True)
+    created_at = DateTimeField(default=datetime.utcnow)
     updated_at = DateTimeField(default=datetime.utcnow)
 
     meta = {
         "collection": "inventory",
-        "indexes": ["spare_part", "updated_at"],
+        "indexes": ["spare_part", "quantity", "storage_position", "created_at"],
     }
 
     def save(self, *args, **kwargs):

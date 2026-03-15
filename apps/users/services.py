@@ -7,70 +7,77 @@ from apps.users.models import User
 class UserService:
 
     @staticmethod
-    def create_user(payload, image_file=None):
-        email = payload["email"].strip().lower()
+    def create_user(payload, actor_user=None):
 
-        if User.objects(email=email).first():
-            raise ValueError("Email already exists")
+        role = payload.get("role", "CUSTOMER").upper()
+        provided_key = (payload.get("key") or "").strip()
+        actor_role = (getattr(actor_user, "role", "") or "").upper()
 
-        role = payload.get("role", User.ROLE_CUSTOMER)
-        key = payload.get("key")
+        # CUSTOMER must register themselves
+        if role == "CUSTOMER":
+            if actor_user and getattr(actor_user, "is_authenticated", False):
+                raise ValueError("Admin cannot create customer users")
 
-        if role == User.ROLE_STAFF and key != settings.SECRET_KEY_FOR_STAFF_USER:
-            raise ValueError("Invalid staff key")
+        if role == "STAFF":
+            if not actor_user or actor_role != "ADMIN":
+                raise ValueError("Only admin can create STAFF")
 
-        if role == User.ROLE_ADMIN and key != settings.SECRET_KEY_FOR_ADMIN_USER:
-            raise ValueError("Invalid admin key")
+            expected_key = (settings.SECRET_KEY_FOR_STAFF_USER or "").strip()
+            if not expected_key:
+                raise ValueError("Staff creation key is not configured")
+            if provided_key != expected_key:
+                raise ValueError("Invalid staff creation key")
 
-        image_url = ""
-
-        if image_file:
-            image_url = S3Service().upload_image(image_file, folder=settings.S3_USERS_FOLDER)
+        if role == "ADMIN":
+            expected_key = (settings.SECRET_KEY_FOR_ADMIN_USER or "").strip()
+            if not expected_key:
+                raise ValueError("Admin creation key is not configured")
+            if provided_key != expected_key:
+                raise ValueError("Invalid admin creation key")
 
         user = User(
             name=payload["name"],
-            email=email,
-            phone=payload["phone"],
-            image=image_url,
+            email=payload["email"],
+            age=payload["age"],
+            phone_number=payload["phone_number"],
+            image=(payload.get("image") or "").strip(),
             role=role,
         )
 
         user.set_password(payload["password"])
+
         user.save()
 
         return user
 
     @staticmethod
-    def update_profile(user, payload, image_file=None):
+    def update_user(user, payload):
 
-        if "name" in payload:
-            user.name = payload["name"]
+        for field in ["name", "email", "age", "phone_number", "image", "role"]:
 
-        if "email" in payload:
-            new_email = (payload["email"] or "").strip().lower()
-            if new_email and new_email != user.email:
-                if User.objects(email=new_email).first():
-                    raise ValueError("Email already in use")
-                user.email = new_email
-
-        if "phone" in payload:
-            user.phone = payload["phone"]
+            if field in payload:
+                if field == "email":
+                    email = (payload[field] or "").strip().lower()
+                    existing = User.objects(email=email).first()
+                    if existing and str(existing.id) != str(user.id):
+                        raise ValueError("Email already exists")
+                    setattr(user, field, email)
+                    continue
+                if field == "image":
+                    setattr(user, field, (payload[field] or "").strip())
+                    continue
+                if field == "role":
+                    role = (payload[field] or "").strip().upper()
+                    if role not in {"CUSTOMER", "STAFF", "ADMIN"}:
+                        raise ValueError("Invalid role")
+                    setattr(user, field, role)
+                    continue
+                setattr(user, field, payload[field])
 
         if "old_password" in payload and "new_password" in payload:
             if not user.check_password(payload["old_password"]):
-                raise ValueError("Current password is incorrect")
+                raise ValueError("Incorrect current password")
             user.set_password(payload["new_password"])
-
-        if image_file:
-
-            # delete old image if exists
-            if user.image:
-                try:
-                    S3Service().delete_image(user.image)
-                except Exception:
-                    pass
-
-            user.image = S3Service().upload_image(image_file, folder=settings.S3_USERS_FOLDER)
 
         user.save()
 
@@ -78,18 +85,18 @@ class UserService:
 
     @staticmethod
     def delete_user(request_user, target_user):
-        if request_user.role == User.ROLE_ADMIN:
-            pass
 
-        elif str(request_user.id) == str(target_user.id):
-            pass
+        request_role = (getattr(request_user, "role", "") or "").upper()
+        is_admin = request_role == "ADMIN"
+        is_self = str(getattr(request_user, "id", "")) == str(getattr(target_user, "id", ""))
 
-        else:
-            raise ValueError("You can only delete your own account")
+        if not is_admin and not is_self:
+            raise ValueError("Only admin can delete other users")
 
-        if target_user.image:
+        image_url = (getattr(target_user, "image", "") or "").strip()
+        if image_url:
             try:
-                S3Service().delete_image(target_user.image)
+                S3Service().delete_image(image_url)
             except Exception:
                 pass
 

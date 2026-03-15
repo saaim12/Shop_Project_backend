@@ -2,14 +2,29 @@ from rest_framework.response import Response
 
 
 def extract_error_message(errors, fallback="Invalid request data"):
-    if isinstance(errors, dict):
-        for value in errors.values():
-            if isinstance(value, list) and value:
-                return str(value[0])
-            if isinstance(value, str):
-                return value
-    if isinstance(errors, list) and errors:
-        return str(errors[0])
+    def _first_error(value, prefix=""):
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                path = f"{prefix}.{key}" if prefix else str(key)
+                found = _first_error(nested, path)
+                if found:
+                    return found
+            return None
+
+        if isinstance(value, list) and value:
+            first = value[0]
+            if isinstance(first, (dict, list)):
+                return _first_error(first, prefix)
+            return f"{prefix}: {first}" if prefix else str(first)
+
+        if isinstance(value, str):
+            return f"{prefix}: {value}" if prefix else value
+
+        return None
+
+    message = _first_error(errors)
+    if message:
+        return message
     return fallback
 
 
