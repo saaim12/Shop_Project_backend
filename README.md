@@ -78,9 +78,17 @@ Optional / media:
 - `DO_SPACES_ENDPOINT`
 - `DO_SPACES_BASE_URL`
 
+Optional / MongoDB Atlas TLS:
+
+- `MONGO_TLS_CA_FILE`
+- `MONGO_SERVER_SELECTION_TIMEOUT_MS`
+- `MONGO_CONNECT_TIMEOUT_MS`
+- `MONGO_SOCKET_TIMEOUT_MS`
+
 ## Notes
 
 - `config/settings.py` is environment-driven and production-safe by default (`DEBUG=False`).
+- Atlas connections use the system CA store plus `certifi` by default; set `MONGO_TLS_CA_FILE` only if you need to override the CA bundle path in your deployment environment.
 - CORS is configurable with:
   - `CORS_ALLOW_ALL_ORIGINS`
   - `CORS_ALLOWED_ORIGINS`

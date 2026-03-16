@@ -98,13 +98,19 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
-    # "EXCEPTION_HANDLER": "config.exceptions.custom_exception_handler",
+    "EXCEPTION_HANDLER": "config.exceptions.custom_exception_handler",
 }
 
 
 # Mongo
 MONGO_DB_URI = config("MONGO_DB_URI", default="")
 MONGO_DB_NAME = config("MONGO_DB_NAME", default="shop_db")
+MONGO_TLS_CA_FILE = config("MONGO_TLS_CA_FILE", default="")
+MONGO_SERVER_SELECTION_TIMEOUT_MS = config(
+    "MONGO_SERVER_SELECTION_TIMEOUT_MS", default=5000, cast=int
+)
+MONGO_CONNECT_TIMEOUT_MS = config("MONGO_CONNECT_TIMEOUT_MS", default=5000, cast=int)
+MONGO_SOCKET_TIMEOUT_MS = config("MONGO_SOCKET_TIMEOUT_MS", default=10000, cast=int)
 
 
 # JWT
