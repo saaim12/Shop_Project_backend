@@ -85,6 +85,13 @@ class RimDetailView(APIView):
         if not serializer.is_valid():
             return error_response(extract_error_message(serializer.errors), status.HTTP_400_BAD_REQUEST)
         updated = RimService.update_rim(rim, serializer.validated_data)
+        image_files = request.FILES.getlist("images")
+        if image_files:
+            RimService.delete_all_images(updated)
+            try:
+                RimService.add_images(updated, image_files)
+            except ValueError as exc:
+                return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
         return success_response(RimSerializer(updated).data, message="Rim updated successfully")
 
     def delete(self, request, rim_id):

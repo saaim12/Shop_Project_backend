@@ -7,6 +7,37 @@ from apps.users.models import User
 class UserService:
 
     @staticmethod
+    def list_users(filters=None):
+        query = User.objects()
+        filters = filters or {}
+
+        name = (filters.get("name") or "").strip()
+        if name:
+            query = query.filter(name=name)
+
+        email = (filters.get("email") or "").strip().lower()
+        if email:
+            query = query.filter(email=email)
+
+        role = (filters.get("role") or "").strip().upper()
+        if role:
+            query = query.filter(role=role)
+
+        created_at = filters.get("created_at")
+        if created_at is not None:
+            query = query.filter(created_at=created_at)
+
+        created_at_from = filters.get("created_at_from")
+        if created_at_from is not None:
+            query = query.filter(created_at__gte=created_at_from)
+
+        created_at_to = filters.get("created_at_to")
+        if created_at_to is not None:
+            query = query.filter(created_at__lte=created_at_to)
+
+        return query.order_by("-created_at")
+
+    @staticmethod
     def create_user(payload, actor_user=None):
 
         role = payload.get("role", "CUSTOMER").upper()

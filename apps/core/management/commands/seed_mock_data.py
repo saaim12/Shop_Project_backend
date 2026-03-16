@@ -144,19 +144,22 @@ class Command(BaseCommand):
             rim_docs.append(doc)
 
         inventory_seeds = [
-            (spare_part_docs[0], 10, "A-R1-S1"),
-            (spare_part_docs[1], 6, "A-R1-S2"),
-            (spare_part_docs[2], 4, "A-R2-S1"),
+            (Inventory.CATEGORY_SPARE_PART, spare_part_docs[0], 10, "A-R1-S1"),
+            (Inventory.CATEGORY_SPARE_PART, spare_part_docs[1], 6, "A-R1-S2"),
+            (Inventory.CATEGORY_TYRE, tyre_docs[0], 12, "B-R1-S1"),
+            (Inventory.CATEGORY_RIMS, rim_docs[0], 8, "C-R1-S1"),
+            (Inventory.CATEGORY_CARS, car_docs[0], 1, "YARD-A1"),
         ]
 
-        for spare_part, quantity, position in inventory_seeds:
-            inventory = Inventory.objects(spare_part=spare_part).first()
+        for category, product, quantity, position in inventory_seeds:
+            inventory = Inventory.objects(category=category, product=product).first()
             if not inventory:
                 inventory = Inventory(
-                    spare_part=spare_part,
+                    category=category,
+                    product=product,
                     quantity=quantity,
                     storage_position=position,
-                    added_by=admin,
+                    stored_by=admin,
                 )
                 inventory.save()
 

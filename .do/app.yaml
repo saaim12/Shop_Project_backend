@@ -1,0 +1,68 @@
+name: shop-project-backend
+
+services:
+  - name: api
+    environment_slug: python
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    source_dir: /
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: saaim12/Shop_Project_backend
+    run_command: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --max-requests 500 --max-requests-jitter 50
+    http_port: 8080
+
+    health_check:
+      http_path: /
+
+    envs:
+      - key: SECRET_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: DEBUG
+        scope: RUN_TIME
+        value: "False"
+      - key: ALLOWED_HOSTS
+        scope: RUN_TIME
+        value: .ondigitalocean.app
+      - key: MONGO_DB_URI
+        scope: RUN_TIME
+        type: SECRET
+      - key: MONGO_DB_NAME
+        scope: RUN_TIME
+        value: shop_db
+      - key: JWT_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: SECRET_KEY_FOR_STAFF_USER
+        scope: RUN_TIME
+        type: SECRET
+      - key: SECRET_KEY_FOR_ADMIN_USER
+        scope: RUN_TIME
+        type: SECRET
+      - key: CORS_ALLOW_ALL_ORIGINS
+        scope: RUN_TIME
+        value: "True"
+      - key: CORS_ALLOWED_ORIGINS
+        scope: RUN_TIME
+        value: https://your-frontend-domain.com
+      - key: DO_SPACES_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: DO_SPACES_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: DO_SPACES_BUCKET
+        scope: RUN_TIME
+        value: your-space-bucket
+      - key: DO_SPACES_REGION
+        scope: RUN_TIME
+        value: nyc3
+      - key: DO_SPACES_ENDPOINT
+        scope: RUN_TIME
+        value: nyc3.digitaloceanspaces.com
+      - key: DO_SPACES_BASE_URL
+        scope: RUN_TIME
+        value: https://your-space-bucket.nyc3.digitaloceanspaces.com
+        

@@ -1,6 +1,7 @@
 asgiref==3.11.1
 Django==5.2.12
 djangorestframework==3.16.1
+gunicorn==23.0.0
 dnspython==2.8.0
 pymongo==4.16.0
 python-dotenv==1.2.2

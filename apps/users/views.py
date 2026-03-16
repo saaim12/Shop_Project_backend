@@ -1,4 +1,5 @@
 from bson import ObjectId
+from datetime import datetime, timezone
 from django.conf import settings
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -48,6 +49,21 @@ def _replace_user_image(user, image_file):
             S3Service().delete_image(old_image)
         except Exception:
             pass
+
+
+def _parse_iso_datetime(value, field_name):
+    if value in (None, ""):
+        return None
+
+    normalized_value = value.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized_value)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be a valid ISO datetime") from exc
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
 
 
 class RegisterView(APIView):
@@ -168,7 +184,22 @@ class UsersListView(APIView):
         if role_of(request.user) != "ADMIN":
             return error_response("Only admin can list users", status.HTTP_403_FORBIDDEN)
 
-        users = User.objects().order_by("-created_at")
+        try:
+            created_at = _parse_iso_datetime(request.query_params.get("created_at"), "created_at")
+            created_at_from = _parse_iso_datetime(request.query_params.get("created_at_from"), "created_at_from")
+            created_at_to = _parse_iso_datetime(request.query_params.get("created_at_to"), "created_at_to")
+        except ValueError as exc:
+            return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
+
+        filters = {
+            "name": request.query_params.get("name"),
+            "email": request.query_params.get("email"),
+            "role": request.query_params.get("role"),
+            "created_at": created_at,
+            "created_at_from": created_at_from,
+            "created_at_to": created_at_to,
+        }
+        users = UserService.list_users(filters=filters)
         return success_response([UserSerializer(user).data for user in users], message="Users fetched successfully")
 
 
@@ -200,11 +231,6 @@ class UserByIdView(APIView):
 
         if not requester_is_admin and not requester_is_self:
             return error_response("Forbidden", status.HTTP_403_FORBIDDEN)
-
-        if requester_is_admin and not requester_is_self:
-            target_role = (getattr(target_user, "role", "") or "").upper()
-            if target_role == "CUSTOMER":
-                return error_response("Admin cannot update customer accounts", status.HTTP_403_FORBIDDEN)
 
         payload = request.data.copy()
         image_file = _get_uploaded_image_file(request)

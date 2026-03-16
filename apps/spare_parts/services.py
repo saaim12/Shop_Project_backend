@@ -1,5 +1,6 @@
 from bson import ObjectId
 from django.conf import settings
+from mongoengine.errors import NotUniqueError
 
 from apps.services.s3_service import S3Service
 from apps.spare_parts.models import SparePart, SparePartImage
@@ -25,8 +26,11 @@ class SparePartService:
 
     @staticmethod
     def create_spare_part(payload):
+        name = payload["name"]
+        if SparePart.objects(name=name).first():
+            raise ValueError(f"A spare part with the name '{name}' already exists")
         part = SparePart(
-            name=payload["name"],
+            name=name,
             brand=payload["brand"],
             model=payload["model"],
             model_year=payload["model_year"],
@@ -45,7 +49,10 @@ class SparePartService:
             oem_numbers=payload.get("oem_numbers", ""),
             identification_numbers=payload.get("identification_numbers", ""),
         )
-        part.save()
+        try:
+            part.save()
+        except NotUniqueError:
+            raise ValueError(f"A spare part with the name '{part.name}' already exists")
         return part
 
     @staticmethod
@@ -71,8 +78,16 @@ class SparePartService:
             "identification_numbers",
         ]:
             if field in payload:
+                if field == "name":
+                    new_name = payload["name"]
+                    existing = SparePart.objects(name=new_name).first()
+                    if existing and str(existing.id) != str(part.id):
+                        raise ValueError(f"A spare part with the name '{new_name}' already exists")
                 setattr(part, field, payload[field])
-        part.save()
+        try:
+            part.save()
+        except NotUniqueError:
+            raise ValueError(f"A spare part with the name '{part.name}' already exists")
         return part
 
     @staticmethod

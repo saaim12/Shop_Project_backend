@@ -85,6 +85,13 @@ class TyreDetailView(APIView):
         if not serializer.is_valid():
             return error_response(extract_error_message(serializer.errors), status.HTTP_400_BAD_REQUEST)
         updated = TyreService.update_tyre(tyre, serializer.validated_data)
+        image_files = request.FILES.getlist("images")
+        if image_files:
+            TyreService.delete_all_images(updated)
+            try:
+                TyreService.add_images(updated, image_files)
+            except ValueError as exc:
+                return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
         return success_response(TyreSerializer(updated).data, message="Tyre updated successfully")
 
     def delete(self, request, tyre_id):

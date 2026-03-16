@@ -5,20 +5,32 @@ from rest_framework.views import APIView
 
 from apps.inventory.serializers import InventorySerializer
 from apps.inventory.services import InventoryService
-from apps.users.permissions import IsStaffOrAdminOnly
+from apps.users.permissions import IsAdmin, IsStaffOrAdminOnly
 from config.pagination import DefaultPagination
 from config.response import error_response, extract_error_message, success_response
 
 
 class InventoryListCreateView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
-    permission_classes = [IsAuthenticated, IsStaffOrAdminOnly]
+
+    def get_permissions(self):
+        if self.request.method in {"GET", "POST"}:
+            return [IsAuthenticated(), IsStaffOrAdminOnly()]
+        return [IsAuthenticated(), IsAdmin()]
 
     def get(self, request):
-        queryset = InventoryService.list_inventory()
+        try:
+            queryset = InventoryService.list_inventory(
+                category=request.query_params.get("category"),
+                stored_by_id=request.query_params.get("stored_by") or request.query_params.get("user_id"),
+            )
+        except ValueError as exc:
+            return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
+
         paginator = DefaultPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
         data = [InventorySerializer(item).data for item in page]
+
         payload = {
             "count": paginator.page.paginator.count,
             "next": paginator.get_next_link(),
@@ -45,7 +57,11 @@ class InventoryListCreateView(APIView):
 
 class InventoryDetailView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
-    permission_classes = [IsAuthenticated, IsStaffOrAdminOnly]
+
+    def get_permissions(self):
+        if self.request.method in {"PATCH", "DELETE"}:
+            return [IsAuthenticated(), IsStaffOrAdminOnly()]
+        return [IsAuthenticated(), IsAdmin()]
 
     def patch(self, request, inventory_id):
         item = InventoryService.get_inventory_item(inventory_id)
@@ -70,5 +86,8 @@ class InventoryDetailView(APIView):
         item = InventoryService.get_inventory_item(inventory_id)
         if not item:
             return error_response("Inventory item not found", status.HTTP_404_NOT_FOUND)
-        InventoryService.delete_inventory(item)
+        try:
+            InventoryService.delete_inventory(item)
+        except ValueError as exc:
+            return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
         return success_response({"deleted": True}, message="Inventory deleted successfully")

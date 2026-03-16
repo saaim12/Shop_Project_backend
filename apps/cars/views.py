@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from rest_framework import status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -8,6 +10,21 @@ from apps.cars.services import CarService
 from apps.users.permissions import IsStaffOrAdminOnly
 from config.pagination import DefaultPagination
 from config.response import error_response, extract_error_message, success_response
+
+
+def _parse_iso_datetime(value, field_name):
+    if value in (None, ""):
+        return None
+
+    normalized_value = value.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized_value)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be a valid ISO datetime") from exc
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
 
 
 class CarListCreateView(APIView):
@@ -27,8 +44,11 @@ class CarListCreateView(APIView):
         try:
             model_year = int(request.query_params.get("model_year")) if request.query_params.get("model_year") else None
             year = int(request.query_params.get("year")) if request.query_params.get("year") else None
+            created_at = _parse_iso_datetime(request.query_params.get("created_at"), "created_at")
+            created_at_from = _parse_iso_datetime(request.query_params.get("created_at_from"), "created_at_from")
+            created_at_to = _parse_iso_datetime(request.query_params.get("created_at_to"), "created_at_to")
         except ValueError:
-            return error_response("model_year and year must be integers", status.HTTP_400_BAD_REQUEST)
+            return error_response("model_year and year must be integers, and created_at fields must be valid ISO datetime", status.HTTP_400_BAD_REQUEST)
 
         filters = {
             "name": request.query_params.get("name"),
@@ -37,6 +57,10 @@ class CarListCreateView(APIView):
             "model_year": model_year,
             "year": year,
             "condition": (request.query_params.get("condition") or "").upper() or None,
+            "chassis_number": request.query_params.get("chassis_number"),
+            "created_at": created_at,
+            "created_at__gte": created_at_from,
+            "created_at__lte": created_at_to,
         }
         queryset = CarService.list_cars(filters=filters)
         paginator = DefaultPagination()
@@ -54,7 +78,10 @@ class CarListCreateView(APIView):
         serializer = CarSerializer(data=request.data)
         if not serializer.is_valid():
             return error_response(extract_error_message(serializer.errors), status.HTTP_400_BAD_REQUEST)
-        car = CarService.create_car(serializer.validated_data)
+        try:
+            car = CarService.create_car(serializer.validated_data)
+        except ValueError as exc:
+            return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
         image_files = request.FILES.getlist("images")
         if image_files:
             CarService.add_images(car, image_files)
@@ -87,7 +114,17 @@ class CarDetailView(APIView):
         serializer = CarSerializer(data=request.data, partial=True)
         if not serializer.is_valid():
             return error_response(extract_error_message(serializer.errors), status.HTTP_400_BAD_REQUEST)
-        updated = CarService.update_car(car, serializer.validated_data)
+        try:
+            updated = CarService.update_car(car, serializer.validated_data)
+        except ValueError as exc:
+            return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
+        image_files = request.FILES.getlist("images")
+        if image_files:
+            CarService.delete_all_images(updated)
+            try:
+                CarService.add_images(updated, image_files)
+            except ValueError as exc:
+                return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
         return success_response(CarSerializer(updated).data, message="Car updated successfully")
 
     def delete(self, request, car_id):

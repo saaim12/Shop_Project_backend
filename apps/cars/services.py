@@ -1,11 +1,26 @@
 from bson import ObjectId
 from django.conf import settings
+from mongoengine.errors import NotUniqueError
 
 from apps.cars.models import Car, CarImage
 from apps.services.s3_service import S3Service
 
 
 class CarService:
+    @staticmethod
+    def _ensure_unique_fields(payload, current_car=None):
+        chassis_number = payload.get("chassis_number")
+        if chassis_number:
+            existing = Car.objects(chassis_number=chassis_number).first()
+            if existing and (not current_car or str(existing.id) != str(current_car.id)):
+                raise ValueError("A car with this chassis number already exists")
+
+        number_plate = payload.get("number_plate")
+        if number_plate:
+            existing = Car.objects(number_plate=number_plate).first()
+            if existing and (not current_car or str(existing.id) != str(current_car.id)):
+                raise ValueError("A car with this number plate already exists")
+
     @staticmethod
     def list_cars(filters=None):
         query = Car.objects()
@@ -25,6 +40,7 @@ class CarService:
 
     @staticmethod
     def create_car(payload):
+        CarService._ensure_unique_fields(payload)
         car = Car(
             name=payload["name"],
             brand=payload["brand"],
@@ -35,15 +51,32 @@ class CarService:
             chassis_number=payload["chassis_number"],
             description=payload.get("description", ""),
         )
-        car.save()
+        try:
+            car.save()
+        except NotUniqueError as exc:
+            error_text = str(exc)
+            if "chassis_number" in error_text:
+                raise ValueError("A car with this chassis number already exists") from exc
+            if "number_plate" in error_text:
+                raise ValueError("A car with this number plate already exists") from exc
+            raise ValueError("Duplicate unique field value") from exc
         return car
 
     @staticmethod
     def update_car(car, payload):
+        CarService._ensure_unique_fields(payload, current_car=car)
         for field in ["name", "brand", "model", "model_year", "year", "condition", "chassis_number", "description"]:
             if field in payload:
                 setattr(car, field, payload[field])
-        car.save()
+        try:
+            car.save()
+        except NotUniqueError as exc:
+            error_text = str(exc)
+            if "chassis_number" in error_text:
+                raise ValueError("A car with this chassis number already exists") from exc
+            if "number_plate" in error_text:
+                raise ValueError("A car with this number plate already exists") from exc
+            raise ValueError("Duplicate unique field value") from exc
         return car
 
     @staticmethod

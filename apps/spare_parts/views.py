@@ -1,3 +1,4 @@
+from mongoengine.errors import OperationError
 from rest_framework import status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -57,7 +58,10 @@ class SparePartListCreateView(APIView):
         serializer = SparePartSerializer(data=request.data)
         if not serializer.is_valid():
             return error_response(extract_error_message(serializer.errors), status.HTTP_400_BAD_REQUEST)
-        part = SparePartService.create_spare_part(serializer.validated_data)
+        try:
+            part = SparePartService.create_spare_part(serializer.validated_data)
+        except (ValueError, OperationError) as exc:
+            return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
         image_files = request.FILES.getlist("images")
         if image_files:
             SparePartService.add_images(part, image_files)
@@ -90,7 +94,17 @@ class SparePartDetailView(APIView):
         serializer = SparePartSerializer(data=request.data, partial=True)
         if not serializer.is_valid():
             return error_response(extract_error_message(serializer.errors), status.HTTP_400_BAD_REQUEST)
-        updated = SparePartService.update_spare_part(part, serializer.validated_data)
+        try:
+            updated = SparePartService.update_spare_part(part, serializer.validated_data)
+        except (ValueError, OperationError) as exc:
+            return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
+        image_files = request.FILES.getlist("images")
+        if image_files:
+            SparePartService.delete_all_images(updated)
+            try:
+                SparePartService.add_images(updated, image_files)
+            except ValueError as exc:
+                return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
         return success_response(SparePartSerializer(updated).data, message="Spare part updated successfully")
 
     def delete(self, request, part_id):
